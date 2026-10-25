@@ -43,9 +43,13 @@ CMP W0, #0x7C104F8B
 CMP W0, #0x1D55A9C3
 ```
 
+<p align="center">
+  <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/difference.png" width="550" alt="Code difference"/>
+</p>
+
 ## Table of Contents
 
-- [Happy News : )](#happy-news--)
+- [Compatibility](#compatibility)
 - [Features](#features)
 - [Getting started](#getting-started)
 - [Usage](#usage)
@@ -63,7 +67,7 @@ CMP W0, #0x1D55A9C3
 - [Contributing](#contributing)
 - [License](#license)
 
-## Happy News : )
+## Compatibility
 
 > `stealth_enum` is implemented entirely in **pure Dart**. So don't worry about:
 > - **iOS Swift Package Manager (SPM)**: 100% compatible. Requires no CocoaPods or native SPM configuration.
