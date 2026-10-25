@@ -6,7 +6,7 @@
   <a href="https://flutter.dev"><img src="https://img.shields.io/badge/Flutter-3.19%2B-blue?logo=flutter" alt="Flutter"></a>
   <br>
   <a href="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace"><img src="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace/graph/badge.svg" alt="codecov"></a>
-  <a href="https://app.codacy.com/gh/aslamambiloly/stealth_enum_workspace/dashboard"><img src="https://app.codacy.com/project/badge/Grade/stealth_enum_workspace" alt="Codacy Badge"></a>
+  <!-- <a href="https://app.codacy.com/gh/aslamambiloly/stealth_enum_workspace/dashboard"><img src="https://app.codacy.com/project/badge/Grade/stealth_enum_workspace" alt="Codacy Badge"></a> -->
 </p>
 
 <p align="center">
@@ -18,10 +18,10 @@ A Zero Overhead Dart & Flutter code generator that hides enum metadata, randomiz
 ## The Issue : (
 You maybe already doing:
 
-✅ --obfuscate --split-debug-info=.
-✅ SSL Certificate Pinning.
-✅ App Attest & App Integrity.
-✅ [freeRasp](https://pub.dev/packages/freerasp).
+✅ `--obfuscate --split-debug-info=.`<br>
+✅ SSL Certificate Pinning.<br>
+✅ App Attest & App Integrity.<br>
+✅ [freeRasp](https://pub.dev/packages/freerasp).<br>
 ✅ [envied](https://pub.dev/packages/envied).
 
 Do you feel like you are protected? Yes, but there's a small catch when it comes to reverse engineering. 

@@ -6,7 +6,7 @@
   <a href="https://flutter.dev"><img src="https://img.shields.io/badge/Flutter-3.19%2B-blue?logo=flutter" alt="Flutter"></a>
   <br>
   <a href="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace"><img src="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace/graph/badge.svg" alt="codecov"></a>
-  <a href="https://app.codacy.com/gh/aslamambiloly/stealth_enum_workspace/dashboard"><img src="https://app.codacy.com/project/badge/Grade/stealth_enum_workspace" alt="Codacy Badge"></a>
+  <!-- <a href="https://app.codacy.com/gh/aslamambiloly/stealth_enum_workspace/dashboard"><img src="https://app.codacy.com/project/badge/Grade/stealth_enum_workspace" alt="Codacy Badge"></a> -->
 </p>
 
 <p align="center">
