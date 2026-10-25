@@ -15,7 +15,7 @@
 
 A Zero Overhead Dart & Flutter code generator that hides enum metadata, randomizes enum values, and makes AOT binaries harder to reverse engineer (REA, Blutter, Ghidra etc.).
 
-## The Issue : (
+## The `Issue` : (
 You maybe already doing:
 
 ✅ `--obfuscate --split-debug-info=.`<br>
@@ -46,7 +46,7 @@ CMP W0, #0x7C104F8B
 CMP W0, #0x1D55A9C3
 ```
 
-## What to change in the code?
+## What to change in the `code`?
 Not much! Just make your enums private and add `@StealthEnum()` annotation to it just like the image below:
 
 
