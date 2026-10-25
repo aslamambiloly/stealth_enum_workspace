@@ -44,7 +44,7 @@ CMP W0, #0x1D55A9C3
 ```
 
 ## What to change in the code?
-Not much! Just add `@StealthEnum()` annotation to your private enums (make private if it's not already) and run the code generator just like it shown on the image below.
+Not much! Just make your enums private and add `@StealthEnum()` annotation to it just like the image below:
 
 
 <p align="center">
@@ -64,7 +64,11 @@ flutter pub run build_runner build --delete-conflicting-outputs
 ```
 
 
-Enjoy using the **same enum class name** as if nothing has changed!
+And enjoy using the **same enum class** with **same enum name** as if nothing has changed just like below image!
+
+<p align="center">
+  <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/before-after.png" width="550" alt="Before and After"/>
+</p>
 
 ## Table of Contents
 
