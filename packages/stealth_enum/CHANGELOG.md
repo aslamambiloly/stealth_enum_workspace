@@ -1,3 +1,9 @@
+## 0.1.1
+
+* Added package example in `example/example.dart`.
+* Added dartdoc comments for `StealthEnum` constructor.
+* Refined package description to adhere to pub.dev length guidelines.
+
 ## 0.1.0
 
 * Initial release.

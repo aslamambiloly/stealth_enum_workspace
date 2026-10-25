@@ -49,6 +49,11 @@ final class StealthEnum {
   /// parameter to specify an explicit name instead.
   final String? name;
 
+  /// Creates a [StealthEnum] annotation.
+  ///
+  /// Specify [seed] for deterministic integer generation, [generateWhen] to
+  /// enable or disable `.when()` / `.maybeWhen()` helper generation, or [name]
+  /// to override the generated public extension type name.
   const StealthEnum({
     this.seed,
     this.generateWhen = true,

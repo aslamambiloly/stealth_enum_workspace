@@ -1,3 +1,11 @@
+## 0.1.1
+
+* Added package example in `example/example.dart`.
+* Added dartdoc comment for `StealthEnumGenerator` constructor.
+* Fixed unresolved doc reference `build.yaml` in `builder.dart`.
+* Refined package description to adhere to pub.dev length guidelines.
+* Broadened analyzer compatibility for `EnumElement` constants across versions.
+
 ## 0.1.0
 
 * Initial release.

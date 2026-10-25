@@ -18,6 +18,9 @@ import 'package:stealth_enum/stealth_enum.dart';
 ///   inline the branch at the call site, stripping the helper method itself
 ///   from the binary.
 class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
+  /// Creates a [StealthEnumGenerator] instance.
+  const StealthEnumGenerator();
+
   @override
   dynamic generateForAnnotatedElement(
     Element element,
@@ -34,7 +37,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     }
 
     final EnumElement enumEl = element;
-    final String sourceName = enumEl.name ?? enumEl.displayName; // e.g. '_UserFlow'
+    final String sourceName =
+        enumEl.name ?? enumEl.displayName; // e.g. '_UserFlow'
 
     // Determine the public generated name.
     final String? nameOverride = annotation.peek('name')?.stringValue;
@@ -50,7 +54,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     // ── Extract enum constants ────────────────────────────────────────────────
     // Use .constants (the proper EnumElement API) to avoid synthetic fields
     // like `index`, `values`, `_name`, etc.
-    final List<FieldElement> constants = enumEl.constants;
+    final List<FieldElement> constants =
+        enumEl.fields.where((f) => f.isEnumConstant).toList();
 
     if (constants.isEmpty) {
       throw InvalidGenerationSourceError(
@@ -163,7 +168,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
         '  /// Every case must be handled — adding a new value to the source enum');
     buf.writeln(
         '  /// breaks compilation here until handled. Inlined by AOT into raw integer');
-    buf.writeln('  /// comparisons; the method itself is stripped from the binary.');
+    buf.writeln(
+        '  /// comparisons; the method itself is stripped from the binary.');
     buf.writeln("  @pragma('vm:prefer-inline')");
     buf.writeln('  T when<T>({');
     for (final name in fieldNames) {
@@ -192,7 +198,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     List<String> fieldNames,
     Map<String, int> valueMap,
   ) {
-    buf.writeln('  /// Partial condition flow with required [orElse] fallback.');
+    buf.writeln(
+        '  /// Partial condition flow with required [orElse] fallback.');
     buf.writeln("  @pragma('vm:prefer-inline')");
     buf.writeln('  T maybeWhen<T>({');
     for (final name in fieldNames) {
