@@ -51,11 +51,11 @@ Not much! Just add `@StealthEnum()` annotation to your private enums (make priva
   <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/difference-rounded.png" width="550" alt="Code difference"/>
 </p>
 
-**Sabaaaash! That's it!** You just protected yourself from simple AI assisted reverse engineering attacks. Now run this command to generate the obfuscated code:
+**Sabaaaash! That's it!** You just protected yourself from simple AI assisted reverse engineering attacks.
+
+ Now run:
 
 
-
-<div align="center">
 
 ```bash
 dart run build_runner build --delete-conflicting-outputs
@@ -63,7 +63,6 @@ dart run build_runner build --delete-conflicting-outputs
 flutter pub run build_runner build --delete-conflicting-outputs
 ```
 
-</div>
 
 Enjoy using the **same enum class name** as if nothing has changed!
 
