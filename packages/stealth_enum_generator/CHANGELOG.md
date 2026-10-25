@@ -1,3 +1,8 @@
+## 1.0.0
+
+* Production ready 1.0.0 release.
+* Updated dependency to support `stealth_enum` ^1.0.0.
+
 ## 0.1.1
 
 * Added package example in `example/example.dart`.

@@ -2,7 +2,7 @@ name: stealth_enum
 description: >-
   Obfuscates Dart enums into zero-cost extension types backed by high-entropy
   integers, eliminating enum metadata from Flutter AOT binaries.
-version: 0.1.1
+version: 1.0.0
 repository: https://github.com/aslamambiloly/stealth_enum_workspace
 issue_tracker: https://github.com/aslamambiloly/stealth_enum_workspace/issues
 

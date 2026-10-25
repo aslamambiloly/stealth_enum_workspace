@@ -3,11 +3,11 @@
 // 1. In your pubspec.yaml:
 //
 // dependencies:
-//   stealth_enum: ^0.1.1
+//   stealth_enum: ^1.0.0
 //
 // dev_dependencies:
 //   build_runner: ^2.4.0
-//   stealth_enum_generator: ^0.1.1
+//   stealth_enum_generator: ^1.0.0
 //
 // 2. In your Dart file:
 //

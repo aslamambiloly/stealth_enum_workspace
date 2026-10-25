@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Dart
+        uses: dart-lang/setup-dart@v1
+        with:
+          sdk: stable
+
+      - name: Analyze stealth_enum
+        run: |
+          cd packages/stealth_enum
+          dart pub get
+          dart analyze --fatal-infos
+
+      - name: Analyze stealth_enum_generator
+        run: |
+          cd packages/stealth_enum_generator
+          dart pub get
+          dart analyze --fatal-infos
+
+      - name: Install coverage tool
+        run: dart pub global activate coverage
+
+      - name: Run tests with coverage
+        run: |
+          cd example
+          dart pub get
+          dart pub global run coverage:test_with_coverage
+        # This generates example/coverage/lcov.info automatically
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          files: example/coverage/lcov.info
+          fail_ci_if_error: false

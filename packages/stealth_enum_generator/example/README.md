@@ -4,11 +4,11 @@ To use `stealth_enum_generator`, add it to your `dev_dependencies`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^0.1.1
+  stealth_enum: ^1.0.0
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^0.1.1
+  stealth_enum_generator: ^1.0.0
 ```
 
 Annotate private enums with `@StealthEnum()`, then run:

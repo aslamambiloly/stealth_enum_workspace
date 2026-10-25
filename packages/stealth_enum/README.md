@@ -4,6 +4,9 @@
   <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
   <a href="https://dart.dev"><img src="https://img.shields.io/badge/Dart-3.3%2B-blue?logo=dart" alt="Dart"></a>
   <a href="https://flutter.dev"><img src="https://img.shields.io/badge/Flutter-3.19%2B-blue?logo=flutter" alt="Flutter"></a>
+  <br>
+  <a href="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace"><img src="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace/graph/badge.svg" alt="codecov"></a>
+  <a href="https://app.codacy.com/gh/aslamambiloly/stealth_enum_workspace/dashboard"><img src="https://app.codacy.com/project/badge/Grade/stealth_enum_workspace" alt="Codacy Badge"></a>
 </p>
 
 <p align="center">
@@ -99,6 +102,16 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
 
 ## Features
 
+
+- **Zero Binary String Footprint**: Completely removes enum and constant names from compiled AOT binaries.
+- **Non-Sequential Entropy**: Replaces predictable sequential indices with high-entropy 32-bit hex values.
+- **Zero Runtime Overhead**: Built on Dart 3.3+ `extension type const` over primitive `int` with zero heap allocation and zero boxing.
+- **Inlined Pattern Matching**: `@pragma('vm:prefer-inline')` on `.when()` and `.maybeWhen()` inlines branches directly into call sites.
+- **No `StateError` String Leaks**: The fallback branch in `.when()` uses a wildcard `_ =>` rather than throwing an exception with class names.
+- **Guaranteed Tree-Shaking**: The private annotated enum (`_MyEnum`) is discarded by the compiler; only the lightweight extension type remains.
+- **Deterministic CI Builds**: Optional compile-time `seed` parameter guarantees reproducible builds across team members and CI pipelines.
+- **Pure Dart**: Zero native code, zero CocoaPods or Gradle headaches.
+
 <div align="center">
 
 | Feature | Standard Dart `enum` | `@StealthEnum` |
@@ -112,14 +125,6 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
 
 </div>
 
-- **Zero Binary String Footprint**: Completely removes enum and constant names from compiled AOT binaries.
-- **Non-Sequential Entropy**: Replaces predictable sequential indices with high-entropy 32-bit hex values.
-- **Zero Runtime Overhead**: Built on Dart 3.3+ `extension type const` over primitive `int` with zero heap allocation and zero boxing.
-- **Inlined Pattern Matching**: `@pragma('vm:prefer-inline')` on `.when()` and `.maybeWhen()` inlines branches directly into call sites.
-- **No `StateError` String Leaks**: The fallback branch in `.when()` uses a wildcard `_ =>` rather than throwing an exception with class names.
-- **Guaranteed Tree-Shaking**: The private annotated enum (`_MyEnum`) is discarded by the compiler; only the lightweight extension type remains.
-- **Deterministic CI Builds**: Optional compile-time `seed` parameter guarantees reproducible builds across team members and CI pipelines.
-- **Pure Dart**: Zero native code, zero CocoaPods or Gradle headaches.
 
 ## Getting started
 
@@ -127,11 +132,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^0.1.1
+  stealth_enum: ^1.0.0
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^0.1.1
+  stealth_enum_generator: ^1.0.0
 ```
 
 Then run:

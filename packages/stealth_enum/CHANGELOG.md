@@ -1,3 +1,9 @@
+## 1.0.0
+
+* Production ready 1.0.0 release.
+* Zero runtime overhead and complete enum metadata erasure in Flutter AOT binaries.
+* Full compatibility with Dart 3.3+ and Flutter 3.19+.
+
 ## 0.1.1
 
 * Added package example in `example/example.dart`.
