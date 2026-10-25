@@ -1,3 +1,8 @@
+## 1.0.1
+
+* Improved README formatting and line breaks in documentation.
+* Updated badges and preview graphics.
+
 ## 1.0.0
 
 * Production ready 1.0.0 release.
