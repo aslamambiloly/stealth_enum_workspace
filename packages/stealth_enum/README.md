@@ -47,7 +47,7 @@ CMP W0, #0x1D55A9C3
 Not much! Just make your enums private and add `@StealthEnum()` annotation to it just like the image below:
 
 
-<p align="center">
+<p>
   <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/difference-rounded.png" width="550" alt="Code difference"/>
 </p>
 
@@ -66,7 +66,7 @@ flutter pub run build_runner build --delete-conflicting-outputs
 
 And enjoy using the **same enum class** with **same enum name** as if nothing has changed just like below image!
 
-<p align="center">
+<p>
   <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/before-after.png" width="550" alt="Before and After"/>
 </p>
 
