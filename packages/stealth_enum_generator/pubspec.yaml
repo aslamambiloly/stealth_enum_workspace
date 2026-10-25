@@ -14,8 +14,7 @@ dependencies:
   analyzer: ">=6.0.0 <15.0.0"
   build: ">=2.3.0 <6.0.0"
   source_gen: ">=1.4.0 <5.0.0"
-  stealth_enum:
-    path: ../stealth_enum
+  stealth_enum: ^0.1.0
 
 dev_dependencies:
   build_runner: ">=2.4.0 <3.0.0"
