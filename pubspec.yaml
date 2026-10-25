@@ -1,0 +1,11 @@
+name: stealth_enum_workspace
+description: Monorepo workspace for stealth_enum and stealth_enum_generator.
+publish_to: none
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+workspace:
+  - packages/stealth_enum
+  - packages/stealth_enum_generator
+  - example

@@ -1,0 +1,22 @@
+name: stealth_enum_generator
+description: >-
+  build_runner code generator for stealth_enum. Transforms @StealthEnum
+  annotated private Dart enums into randomized extension types that leave
+  zero metadata footprint in Flutter AOT binaries.
+version: 0.1.0
+repository: https://github.com/stealth-enum/stealth_enum
+
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+
+dependencies:
+  analyzer: ">=6.0.0 <15.0.0"
+  build: ">=2.3.0 <6.0.0"
+  source_gen: ">=1.4.0 <5.0.0"
+  stealth_enum:
+    path: ../stealth_enum
+
+dev_dependencies:
+  build_runner: ">=2.4.0 <3.0.0"
+  lints: ^6.1.0
+  test: "^1.24.0"

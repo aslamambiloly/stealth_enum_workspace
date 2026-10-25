@@ -1,0 +1,10 @@
+include: package:lints/recommended.yaml
+
+analyzer:
+  errors:
+    # The source private enum (_SecurityClearance, _SubscriptionStatus, etc.)
+    # is intentionally unreferenced at runtime — that is the entire point of
+    # stealth_enum. The Dart AOT tree-shaker deletes the enum and its string
+    # table from libapp.so because nothing references it.
+    unused_element: ignore
+    unused_field: ignore
