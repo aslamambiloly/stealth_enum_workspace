@@ -1,1 +1,7 @@
 /PROJECT_SPEC.md
+.DS_Store
+.dart_tool/
+.packages
+.pub-cache/
+.pub/
+build/

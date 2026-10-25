@@ -1,30 +1,59 @@
 # stealth_enum_generator
 
-`build_runner` code generator for [`stealth_enum`](../stealth_enum/README.md).
+<p align="center">
+  <a href="https://pub.dev/packages/stealth_enum_generator"><img src="https://img.shields.io/pub/v/stealth_enum_generator.svg" alt="pub version"></a>
+  <a href="LICENSE"><img src="https://img.shields.io/badge/license-MIT-blue.svg" alt="License: MIT"></a>
+  <a href="https://dart.dev"><img src="https://img.shields.io/badge/Dart-3.3%2B-blue?logo=dart" alt="Dart"></a>
+  <a href="https://flutter.dev"><img src="https://img.shields.io/badge/Flutter-3.19%2B-blue?logo=flutter" alt="Flutter"></a>
+</p>
 
-Add to `dev_dependencies` alongside `build_runner`. See the
-[stealth_enum README](../stealth_enum/README.md) for full usage documentation.
+<p align="center">
+  <a href="https://ko-fi.com/N7K021PF59"><img src="https://raw.githubusercontent.com/aslamambiloly/curved_navigation_bar_pro/main/doc/coffee.png" alt="Support me on Ko-fi" width="400"></a>
+</p>
+
+The companion `build_runner` code generator for [`stealth_enum`](https://pub.dev/packages/stealth_enum).
+
+This package transforms `@StealthEnum()` annotated private Dart enums into zero-cost, obfuscated Dart 3 extension types to neutralize AI-driven reverse engineering pipelines (REA, Blutter, Ghidra).
+
+## Getting started
+
+Add `stealth_enum_generator` to your `dev_dependencies` alongside `build_runner`, and `stealth_enum` to your `dependencies`:
 
 ```yaml
+dependencies:
+  stealth_enum: ^0.1.0
+
 dev_dependencies:
-  stealth_enum_generator: ^0.1.0
   build_runner: ^2.4.0
+  stealth_enum_generator: ^0.1.0
+```
+
+Then run:
+
+```bash
+dart pub get
+# or for Flutter:
+flutter pub get
 ```
 
 ## How it works
 
-`StealthEnumGenerator` extends `GeneratorForAnnotation<StealthEnum>` from
-`source_gen`. For each `@StealthEnum`-annotated `EnumElement` it:
+`StealthEnumGenerator` extends `GeneratorForAnnotation<StealthEnum>` from `source_gen`:
 
-1. Validates the annotated element is an `EnumElement`.
-2. Determines the public type name (strips leading `_`, or uses `name:` override).
-3. Generates **collision-free, deterministic 32-bit hex integers** for each constant using a seeded `Random` (seed = `enumName.hashCode ^ fieldName.hashCode ^ 0xDEADBEEF`, or the user-supplied `seed:`).
-4. Emits an `extension type const Foo._(int rawValue)` block with static constants, `values` list, and optionally `when`/`maybeWhen` helpers.
-5. The final `when` branch uses a wildcard `_ =>` to avoid `StateError` strings in the binary.
+1. **Validation**: Inspects `@StealthEnum()` annotations and ensures they are applied to private `EnumElement` declarations.
+2. **Identifier Extraction**: Resolves the public type name (strips the leading `_` or applies the custom `name:` override).
+3. **Entropy & Value Generation**: Computes collision-free, deterministic 32-bit hex values for each constant using a seeded random distribution.
+4. **Extension Type Synthesis**: Emits an `extension type const <Name>._(int rawValue)` with static constants, `values` list, and fully inlined `.when()` / `.maybeWhen()` pattern matching methods.
+5. **String Sanitization**: Generates wildcard fallbacks (`_ =>`) to ensure no exception strings or class names leak into the compiled AOT binary.
+6. **Shared Pipeline Integration**: Built with `SharedPartBuilder` so it seamlessly shares `.g.dart` files with `json_serializable`, `freezed`, and other generators.
 
-Uses `SharedPartBuilder` so the output participates in the standard `.g.dart`
-combining pipeline alongside `json_serializable`, `freezed`, etc.
+For full documentation and examples, see the [stealth_enum README](https://pub.dev/packages/stealth_enum).
+
+## Contributing
+
+PRs and issues are welcome! Please open an issue first for significant changes.
+
 
 ## License
 
-MIT © stealth_enum contributors
+Made with 💛 by [aslamambiloly](https://github.com/aslamambiloly) © 2026

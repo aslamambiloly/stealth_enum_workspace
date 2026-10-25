@@ -4,7 +4,8 @@ description: >-
   randomized 32-bit integers. Eliminates enum name metadata from Flutter AOT
   binaries, defeating AI-driven reverse-engineering pipelines (REA + Blutter).
 version: 0.1.0
-repository: https://github.com/stealth-enum/stealth_enum
+repository: https://github.com/aslamambiloly/stealth_enum_workspace
+issue_tracker: https://github.com/aslamambiloly/stealth_enum_workspace/issues
 
 environment:
   sdk: ">=3.3.0 <4.0.0"
