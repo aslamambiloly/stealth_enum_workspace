@@ -1,4 +1,3 @@
-# stealth_enum_generator
 
 <p align="center">
   <a href="https://pub.dev/packages/stealth_enum_generator"><img src="https://img.shields.io/pub/v/stealth_enum_generator.svg" alt="pub version"></a>
@@ -21,11 +20,11 @@ Add `stealth_enum_generator` to your `dev_dependencies` alongside `build_runner`
 
 ```yaml
 dependencies:
-  stealth_enum: ^0.1.0
+  stealth_enum: ^0.1.1
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^0.1.0
+  stealth_enum_generator: ^0.1.1
 ```
 
 Then run:

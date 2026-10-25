@@ -1,4 +1,3 @@
-# stealth_enum
 
 <p align="center">
   <a href="https://pub.dev/packages/stealth_enum"><img src="https://img.shields.io/pub/v/stealth_enum.svg" alt="pub version"></a>
@@ -11,22 +10,67 @@
   <a href="https://ko-fi.com/N7K021PF59"><img src="https://raw.githubusercontent.com/aslamambiloly/curved_navigation_bar_pro/main/doc/coffee.png" alt="Support me on Ko-fi" width="400"></a>
 </p>
 
-A zero-overhead, anti-reverse-engineering code generator for Dart and Flutter. It eliminates plain-text enum metadata from compiled AOT binaries, replaces predictable sequential indices with high-entropy non-sequential integers, and inlines pattern matching to neutralize AI-driven decompiler analysis (REA, Blutter, Ghidra).
+A Zero Overhead Dart & Flutter code generator that hides enum metadata, randomizes enum values, and makes AOT binaries harder to reverse engineer (REA, Blutter, Ghidra etc.).
+
+## The `Catch` : |
+You maybe already doing:
+
+✅ --obfuscate --split-debug-info=.
+✅ SSL Certificate Pinning.
+✅ App Attest & App Integrity.
+✅ [freeRasp](https://pub.dev/packages/freerasp).
+✅ [envied](https://pub.dev/packages/envied).
+
+Do you feel like you are protected? Yes, but there's a small catch when it comes to reverse engineering. 
+
+❌ **Dart enums still expose their names intentionally in compiled AOT binaries**.
+
+## Why `stealth_enum`?
+When you compile a Flutter app with `--obfuscate --split-debug-info`, Dart strips class and function symbols. But **enum identifier strings are intentionally preserved** in the Dart Object Pool (`pp.txt` in Blutter) just to support `.name` and `.toString()`.
+
+AI assisted reverse engineering pipelines like **REA (Reverse Engineer Anything)**, **Blutter**, and **Ghidra** use these plain text strings as anchors. They locate the string in decompiled assembly, trace cross-references back to your obfuscated business logic, and reconstruct your licensing, authentication, and security checks.
+
+Standard enums also compile to sequential indices (`0, 1, 2, 3`), creating predictable jump tables that decompilers immediately identify.
+
+
+```text
+// What Blutter sees in pp.txt (Standard Enum):
+"SubscriptionStatus"  "trial"  "active"  "expired"  "cancelled"
+
+// What Ghidra sees in ARM64 (With stealth_enum):
+CMP W0, #0x4B91E20A   // Is it a math constant? Hash? Memory offset?
+CMP W0, #0x7C104F8B
+CMP W0, #0x1D55A9C3
+```
+
+## Table of Contents
+
+- [Happy News : )](#happy-news--)
+- [Features](#features)
+- [Getting started](#getting-started)
+- [Usage](#usage)
+  - [1. Annotate a private enum](#1-annotate-a-private-enum)
+  - [2. Run the code generator](#2-run-the-code-generator)
+  - [3. Use the generated extension type](#3-use-the-generated-extension-type)
+  - [Custom seed for deterministic builds](#custom-seed-for-deterministic-builds)
+  - [Custom type name](#custom-type-name)
+- [Generated Output](#generated-output)
+- [API Reference](#api-reference)
+  - [`@StealthEnum`](#stealthenum)
+  - [Generated Extension Type](#generated-extension-type)
+- [Under the Hood](#under-the-hood)
+- [Running the example](#running-the-example)
+- [Contributing](#contributing)
+- [License](#license)
 
 ## Happy News : )
 
 > `stealth_enum` is implemented entirely in **pure Dart**. So don't worry about:
 > - **iOS Swift Package Manager (SPM)**: 100% compatible. Requires no CocoaPods or native SPM configuration.
 > - **Android Gradle Plugin (AGP 9.0+)**: 100% immune to Kotlin Gradle Plugin (KGP) deprecations and breaking changes.
-> - **Platform Independent**: Works seamlessly across Flutter (Android, iOS, Web, macOS, Windows, Linux) and pure Dart backend / CLI services.
 
-## Why `stealth_enum`?
 
-When you compile a Flutter app with `--obfuscate --split-debug-info`, Dart strips class and function symbols — but **enum identifier strings are intentionally preserved** in the Dart Object Pool (`pp.txt` in Blutter) to support `.name` and `.toString()`.
-
-AI-assisted reverse-engineering pipelines like **REA (Reverse Engineer Anything)**, **Blutter**, and **Ghidra** use these plain-text strings as anchors. They locate the string in decompiled assembly, trace cross-references back to your obfuscated business logic, and reconstruct your licensing, authentication, and security checks.
-
-Standard enums also compile to sequential indices (`0, 1, 2, 3`), creating predictable jump tables that decompilers immediately identify.
+## Features
 
 <div align="center">
 
@@ -41,21 +85,9 @@ Standard enums also compile to sequential indices (`0, 1, 2, 3`), creating predi
 
 </div>
 
-```text
-// What Blutter sees in pp.txt (Standard Enum):
-"SubscriptionStatus"  "trial"  "active"  "expired"  "cancelled"
-
-// What Ghidra sees in ARM64 (With stealth_enum):
-CMP W0, #0x4B91E20A   // Is it a math constant? Hash? Memory offset?
-CMP W0, #0x7C104F8B
-CMP W0, #0x1D55A9C3
-```
-
-## Features
-
 - **Zero Binary String Footprint**: Completely removes enum and constant names from compiled AOT binaries.
 - **Non-Sequential Entropy**: Replaces predictable sequential indices with high-entropy 32-bit hex values.
-- **Zero Runtime Overhead**: Built on Dart 3.3+ `extension type const` over primitive `int` — zero heap allocation and zero boxing.
+- **Zero Runtime Overhead**: Built on Dart 3.3+ `extension type const` over primitive `int` with zero heap allocation and zero boxing.
 - **Inlined Pattern Matching**: `@pragma('vm:prefer-inline')` on `.when()` and `.maybeWhen()` inlines branches directly into call sites.
 - **No `StateError` String Leaks**: The fallback branch in `.when()` uses a wildcard `_ =>` rather than throwing an exception with class names.
 - **Guaranteed Tree-Shaking**: The private annotated enum (`_MyEnum`) is discarded by the compiler; only the lightweight extension type remains.
@@ -68,11 +100,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^0.1.0
+  stealth_enum: ^0.1.1
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^0.1.0
+  stealth_enum_generator: ^0.1.1
 ```
 
 Then run:
@@ -264,7 +296,7 @@ extension type const SecurityClearance._(int rawValue) {
 
 ## Under the Hood
 
-- **Pure Extension Type:** Dart 3.3 introduced `extension type`, which compiles down directly to the underlying representation type (`int`). At runtime, it lives in a CPU register — zero heap allocation and zero pointer indirection.
+- **Pure Extension Type:** Dart 3.3 introduced `extension type`, which compiles down directly to the underlying representation type (`int`). At runtime, it lives in a CPU register with zero heap allocation and zero pointer indirection.
 - **Tree-Shaking:** Because the source enum `_SecurityClearance` is private to the file and never instantiated, the Dart AOT compiler completely removes the original enum declaration, its string names, and metadata from the compiled binary.
 - **Decompiler Neutralization:** Conventional decompilers (Blutter, Ghidra) look for string tables and incremental switch jump tables (`0, 1, 2, ...`). With `stealth_enum`, they see isolated integer comparisons (`CMP W0, #0x7C06254C`) scattered across inlined call sites.
 - **Wildcard Fallback (No String Leaks):** Standard Dart switch statements may generate exception stubs referencing unhandled cases. `stealth_enum` maps the final case of `.when()` to a wildcard `_ =>`, eliminating any runtime error string.
