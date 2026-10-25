@@ -1,3 +1,9 @@
+## 1.0.3
+
+* Added unit test suite for `StealthEnum` annotation.
+* Enhanced example and documentation.
+* Updated CI/CD workflow actions.
+
 ## 1.0.1
 
 * Improved README formatting and line breaks in documentation.

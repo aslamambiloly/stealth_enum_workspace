@@ -138,6 +138,9 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     }
 
     buf.writeln();
+    buf.writeln('  /// Creates a [$publicName] instance from [rawValue] at runtime.');
+    buf.writeln('  const factory $publicName.fromRawValue(int rawValue) = $publicName._;');
+    buf.writeln();
 
     // values list
     buf.writeln('  static const List<$publicName> values = <$publicName>[');

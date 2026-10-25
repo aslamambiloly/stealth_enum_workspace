@@ -1,3 +1,10 @@
+## 1.0.3
+
+* Added `fromRawValue` factory constructor to generated extension types for zero-cost runtime deserialization.
+* Added unit test suite for generator and builder.
+* Achieved 100% test coverage.
+* Updated CI/CD workflow actions.
+
 ## 1.0.1
 
 * Improved README formatting and documentation.

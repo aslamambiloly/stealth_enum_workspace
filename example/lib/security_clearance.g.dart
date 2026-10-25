@@ -12,6 +12,10 @@ extension type const SecurityClearance._(int rawValue) {
   static const SecurityClearance admin = SecurityClearance._(0x7C06254C);
   static const SecurityClearance superAdmin = SecurityClearance._(0x3154C03F);
 
+  /// Creates a [SecurityClearance] instance from [rawValue] at runtime.
+  const factory SecurityClearance.fromRawValue(int rawValue) =
+      SecurityClearance._;
+
   static const List<SecurityClearance> values = <SecurityClearance>[
     guest,
     operator,

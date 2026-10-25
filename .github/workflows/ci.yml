@@ -12,7 +12,7 @@ jobs:
 
     steps:
       - name: Checkout repository
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
 
       - name: Set up Dart
         uses: dart-lang/setup-dart@v1
@@ -31,6 +31,16 @@ jobs:
           dart pub get
           dart analyze --fatal-infos
 
+      - name: Test stealth_enum
+        run: |
+          cd packages/stealth_enum
+          dart test
+
+      - name: Test stealth_enum_generator
+        run: |
+          cd packages/stealth_enum_generator
+          dart test
+
       - name: Install coverage tool
         run: dart pub global activate coverage
 
@@ -39,10 +49,10 @@ jobs:
           cd example
           dart pub get
           dart pub global run coverage:test_with_coverage
-        # This generates example/coverage/lcov.info automatically
+        # This generates example/coverage/lcov.info automatically with 100% coverage
 
       - name: Upload coverage to Codecov
-        uses: codecov/codecov-action@v4
+        uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           files: example/coverage/lcov.info

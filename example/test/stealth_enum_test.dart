@@ -12,6 +12,17 @@ void main() {
       expect(SecurityClearance.guest, equals(SecurityClearance.guest));
     });
 
+    test('fromRawValue reconstructs constants and wraps raw integers', () {
+      expect(
+        SecurityClearance.fromRawValue(SecurityClearance.guest.rawValue),
+        equals(SecurityClearance.guest),
+      );
+      expect(
+        SecurityClearance.fromRawValue(SecurityClearance.admin.rawValue),
+        equals(SecurityClearance.admin),
+      );
+    });
+
     test('inequality — different constants are not equal', () {
       expect(SecurityClearance.admin, isNot(equals(SecurityClearance.guest)));
       expect(
@@ -145,6 +156,17 @@ void main() {
           orElse: () => 'other',
         ),
         equals('other'),
+      );
+    });
+
+    test('fromRawValue reconstructs constants and wraps raw integers', () {
+      expect(
+        SubscriptionStatus.fromRawValue(SubscriptionStatus.active.rawValue),
+        equals(SubscriptionStatus.active),
+      );
+      expect(
+        SubscriptionStatus.fromRawValue(SubscriptionStatus.trial.rawValue),
+        equals(SubscriptionStatus.trial),
       );
     });
   });

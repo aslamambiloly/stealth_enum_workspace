@@ -12,6 +12,10 @@ extension type const SubscriptionStatus._(int rawValue) {
   static const SubscriptionStatus expired = SubscriptionStatus._(0x1D55A9C3);
   static const SubscriptionStatus cancelled = SubscriptionStatus._(0x6E82B119);
 
+  /// Creates a [SubscriptionStatus] instance from [rawValue] at runtime.
+  const factory SubscriptionStatus.fromRawValue(int rawValue) =
+      SubscriptionStatus._;
+
   static const List<SubscriptionStatus> values = <SubscriptionStatus>[
     trial,
     active,
