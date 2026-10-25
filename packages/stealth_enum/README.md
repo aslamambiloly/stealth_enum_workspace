@@ -12,7 +12,7 @@
 
 A Zero Overhead Dart & Flutter code generator that hides enum metadata, randomizes enum values, and makes AOT binaries harder to reverse engineer (REA, Blutter, Ghidra etc.).
 
-## The `Catch` : |
+## The Issue : (
 You maybe already doing:
 
 ✅ --obfuscate --split-debug-info=.
@@ -25,7 +25,7 @@ Do you feel like you are protected? Yes, but there's a small catch when it comes
 
 ❌ **Dart enums still expose their names intentionally in compiled AOT binaries**.
 
-## Why `stealth_enum`?
+## The `Solution` : )
 When you compile a Flutter app with `--obfuscate --split-debug-info`, Dart strips class and function symbols. But **enum identifier strings are intentionally preserved** in the Dart Object Pool (`pp.txt` in Blutter) just to support `.name` and `.toString()`.
 
 AI assisted reverse engineering pipelines like **REA (Reverse Engineer Anything)**, **Blutter**, and **Ghidra** use these plain text strings as anchors. They locate the string in decompiled assembly, trace cross-references back to your obfuscated business logic, and reconstruct your licensing, authentication, and security checks.
@@ -43,9 +43,29 @@ CMP W0, #0x7C104F8B
 CMP W0, #0x1D55A9C3
 ```
 
+## What to change in the code?
+Not much! Just add `@StealthEnum()` annotation to your private enums (make private if it's not already) and run the code generator just like it shown on the image below.
+
+
 <p align="center">
-  <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/difference.png" width="550" alt="Code difference"/>
+  <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/difference-rounded.png" width="550" alt="Code difference"/>
 </p>
+
+**Sabaaaash! That's it!** You just protected yourself from simple AI assisted reverse engineering attacks. Now run this command to generate the obfuscated code:
+
+
+
+<div align="center">
+
+```bash
+dart run build_runner build --delete-conflicting-outputs
+# or for Flutter:
+flutter pub run build_runner build --delete-conflicting-outputs
+```
+
+</div>
+
+Enjoy using the **same enum class name** as if nothing has changed!
 
 ## Table of Contents
 
