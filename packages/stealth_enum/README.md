@@ -22,7 +22,8 @@ You maybe already doing:
 ✅ SSL Certificate Pinning.<br>
 ✅ App Attest & App Integrity.<br>
 ✅ [freeRasp](https://pub.dev/packages/freerasp).<br>
-✅ [envied](https://pub.dev/packages/envied).
+✅ [flutter_secure_storage](https://pub.dev/packages/flutter_secure_storage).<br>
+✅ [envied](https://pub.dev/packages/envied).<br>
 
 Do you feel like you are protected? Yes, but there's a small catch when it comes to reverse engineering. 
 
