@@ -1,3 +1,13 @@
+## 2.2.1
+
+### Documentation & Security Transparency
+* Enhanced documentation and docstrings detailing the security boundaries between default salt, 32-bit `seed`, and secret `key`.
+* Documented mathematical irreversibility of keyed HMAC-SHA256 when configured with high-entropy secret keys against dictionary and rainbow-table attacks.
+* Documented project-wide key configuration via `build.yaml` (`options.config['key']`) and `STEALTH_ENUM_KEY` CI environment variable.
+* Added security warning regarding 32-bit brute-force vulnerability of integer `seed:` values (~1.7h search space on a single CPU core).
+* Updated empirical verification script and sample output.
+* **Zero hash churn**: HMAC-SHA256 derivation is 100% identical and backwards-compatible with 2.2.0.
+
 ## 2.2.0
 
 ### Security & Hardening

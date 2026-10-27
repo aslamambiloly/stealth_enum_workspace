@@ -28,8 +28,11 @@ import 'package:stealth_enum/stealth_enum.dart';
 ///   the enum domain appear in the binary — the only strings are those you
 ///   write yourself in your own business logic.
 class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
+  /// Default secret key supplied via builder options (`build.yaml`) or environment.
+  final String? defaultKey;
+
   /// Creates a [StealthEnumGenerator] instance.
-  const StealthEnumGenerator();
+  const StealthEnumGenerator({this.defaultKey});
 
   static const Set<String> _reservedNames = {
     'when',
@@ -37,6 +40,7 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     'rawValue',
     'values',
     'isValid',
+    'fromRawValue',
     'tryFromRawValue',
     'fromJson',
     'toJson',
@@ -84,7 +88,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     final bool generateLabel =
         annotation.peek('generateLabel')?.boolValue ?? false;
     final int? seedOverride = annotation.peek('seed')?.intValue;
-    final String? keyOverride = annotation.peek('key')?.stringValue;
+    final String? keyOverride =
+        annotation.peek('key')?.stringValue ?? defaultKey;
 
     // ── Extract enum constants ────────────────────────────────────────────────
     final List<FieldElement> constants =

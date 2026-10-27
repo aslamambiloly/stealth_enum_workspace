@@ -100,8 +100,8 @@ void main(List<String> args) {
 }
 EOF
 
-(cd "$BUILD_DIR" && dart compile exe control.dart -o "$CONTROL_BIN" --define=dart.vm.product=true >/dev/null)
-echo -e "${GREEN}[OK]${RESET} Control binary compiled: $(du -sh "$CONTROL_BIN" | cut -f1)"
+(cd "$BUILD_DIR" && dart compile exe control.dart -o "$CONTROL_BIN" -S "$BUILD_DIR/control_symbols" --define=dart.vm.product=true >/dev/null)
+echo -e "${GREEN}[OK]${RESET} Control binary compiled: $(du -sh "$CONTROL_BIN" | cut -f1) (symbols stripped to separate file)"
 echo ""
 echo -e "Scanning control binary for standard enum strings..."
 
@@ -174,9 +174,9 @@ dependency_overrides:
     path: $WORKSPACE_ROOT/packages/stealth_enum_generator
 EOF
 
-echo "Resolving dependencies & compiling stealth binary..."
-(cd "$BUILD_DIR" && dart pub get >/dev/null && dart compile exe stealth_main.dart -o "$STEALTH_BIN" --define=dart.vm.product=true >/dev/null)
-echo -e "${GREEN}[OK]${RESET} Stealth binary compiled: $(du -sh "$STEALTH_BIN" | cut -f1)"
+echo "Resolving dependencies & compiling stealth binary (with -S symbols stripped)..."
+(cd "$BUILD_DIR" && dart pub get >/dev/null && dart compile exe stealth_main.dart -o "$STEALTH_BIN" -S "$BUILD_DIR/stealth_symbols" --define=dart.vm.product=true >/dev/null)
+echo -e "${GREEN}[OK]${RESET} Stealth binary compiled: $(du -sh "$STEALTH_BIN" | cut -f1) (symbols stripped to separate file)"
 echo ""
 echo -e "Scanning stealth binary for private enum identifiers..."
 
@@ -205,16 +205,46 @@ done
 if [[ "${1:-}" == "--flutter" ]]; then
   echo ""
   echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  echo -e "${BOLD}${YELLOW}[FLUTTER MODE] Building release APK with --obfuscate...          ${RESET}"
+  echo -e "${BOLD}${YELLOW}[FLUTTER MODE] Verifying Flutter AOT arm64 libapp.so...          ${RESET}"
   echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
-  if ! command -v flutter &>/dev/null; then
-    echo -e "${RED}[ERROR]${RESET} 'flutter' CLI not found in PATH."
-    exit 1
+  
+  FLUTTER_PROJ="${2:-}"
+  if [[ -n "$FLUTTER_PROJ" && -d "$FLUTTER_PROJ" && -f "$FLUTTER_PROJ/pubspec.yaml" ]]; then
+    if ! command -v flutter &>/dev/null; then
+      echo -e "${RED}[ERROR]${RESET} 'flutter' CLI not found in PATH."
+      exit 1
+    fi
+    echo -e "${CYAN}[INFO]${RESET} Compiling release arm64 APK with obfuscation for project: $FLUTTER_PROJ"
+    mkdir -p "$BUILD_DIR/flutter_symbols"
+    (cd "$FLUTTER_PROJ" && flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info="$BUILD_DIR/flutter_symbols" >/dev/null)
+    
+    APK_PATH="$FLUTTER_PROJ/build/app/outputs/flutter-apk/app-release.apk"
+    if [[ ! -f "$APK_PATH" ]]; then
+      echo -e "${RED}[ERROR]${RESET} Could not find built APK at $APK_PATH"
+      exit 1
+    fi
+    
+    echo -e "${CYAN}[INFO]${RESET} Extracting lib/arm64-v8a/libapp.so from APK..."
+    unzip -p "$APK_PATH" lib/arm64-v8a/libapp.so > "$BUILD_DIR/libapp.so"
+    
+    echo -e "Scanning Flutter arm64 libapp.so for private enum identifiers..."
+    for s in "${STEALTH_STRINGS_ABSENT[@]}"; do
+      if scan_binary_for_string "$BUILD_DIR/libapp.so" "$s"; then
+        echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in Flutter libapp.so: '${BOLD}$s${RESET}'"
+        STEALTH_FAIL=$((STEALTH_FAIL + 1))
+      else
+        echo -e "  ${GREEN}[PASS]${RESET} Sensitive string ABSENT from Flutter libapp.so: '$s'"
+        STEALTH_PASS=$((STEALTH_PASS + 1))
+      fi
+    done
+  else
+    echo -e "${CYAN}[INFO]${RESET} Desktop Dart AOT tests completed with debug symbols stripped (-S)."
+    echo -e "To verify against your real Flutter arm64 release build, pass the Flutter project path:"
+    echo -e "  ${BOLD}./scripts/verify_aot_strings.sh --flutter /path/to/flutter_project${RESET}"
+    echo -e ""
+    echo -e "Or manually test an existing Flutter APK with:"
+    echo -e "  ${BOLD}unzip -p build/app/outputs/flutter-apk/app-release.apk lib/arm64-v8a/libapp.so | strings | grep -E 'superAdmin|trial|cancelled'${RESET}"
   fi
-  echo -e "${CYAN}[INFO]${RESET} Flutter version: $(flutter --version | head -1)"
-  echo -e "To verify on a real Flutter Android app, build with:"
-  echo -e "  ${BOLD}flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=symbols${RESET}"
-  echo -e "  ${BOLD}unzip -p build/app/outputs/flutter-apk/app-release.apk lib/arm64-v8a/libapp.so | strings | grep -E 'superAdmin|trial|cancelled'${RESET}"
 fi
 
 echo ""

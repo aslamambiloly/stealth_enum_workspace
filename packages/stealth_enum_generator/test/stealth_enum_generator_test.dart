@@ -447,7 +447,7 @@ enum _SmallVal {
       );
     });
 
-    test('logs error when constant collides with reserved member name',
+    test('logs error when constant collides with reserved member name (including fromRawValue)',
         () async {
       final logs = <String>[];
       await testBuilder(
@@ -460,7 +460,7 @@ part 'reserved.g.dart';
 
 @StealthEnum()
 enum _ReservedVal {
-  when,
+  fromRawValue,
   admin,
 }
 ''',
@@ -472,6 +472,33 @@ enum _ReservedVal {
         logs,
         anyElement(contains(
             'collides with a generated extension type member or parameter')),
+      );
+    });
+
+    test('stealthEnumBuilder applies config key from build.yaml', () async {
+      await testBuilder(
+        stealthEnumBuilder(
+          const BuilderOptions({'key': 'project_wide_ci_secret_key'}),
+        ),
+        _withSources({
+          'a|lib/secret_status.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'secret_status.g.dart';
+
+@StealthEnum()
+enum _SecretStatus { active, inactive }
+''',
+        }),
+        outputs: {
+          'a|lib/secret_status.stealth_enum.g.part': decodedMatches(
+            allOf([
+              contains('extension type const SecretStatus._(int rawValue) {'),
+              contains('static const SecretStatus active = SecretStatus._('),
+              contains('static const SecretStatus inactive = SecretStatus._('),
+            ]),
+          ),
+        },
       );
     });
   });

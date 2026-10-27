@@ -146,11 +146,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.1.0
+  stealth_enum: ^2.2.1
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.1.0
+  stealth_enum_generator: ^2.2.1
 ```
 
 Then run:
@@ -528,12 +528,52 @@ log('User role changed to ${_roleNames[role]}');
 
 `stealth_enum` uses **keyed HMAC-SHA256** over `'$publicName::$fieldName'` to derive constant values.
 
-Key precedence:
-1. Explicit `key: '...'` string in `@StealthEnum(key: 'secret')`
-2. Explicit `seed: ...` integer in `@StealthEnum(seed: 0xCAFEBABE)`
-3. Default salt: `'stealth_enum:default_salt:0xDEADBEEF'`
+#### Key Precedence & Security Hierarchy
 
-This model provides specific security and architectural guarantees:
+1. **Enum-level secret key**: `@StealthEnum(key: '...')`
+2. **Project-wide secret key**: `build.yaml` option or `STEALTH_ENUM_KEY` environment variable
+3. **Enum-level seed**: `@StealthEnum(seed: 0xCAFEBABE)` *(32-bit namespace separator)*
+4. **Default salt**: `'stealth_enum:default_salt:0xDEADBEEF'` *(zero-configuration default)*
+
+#### Threat Model: Default Salt vs. `seed` vs. Secret `key`
+
+| Mechanism | Resistance to Dictionary & Rainbow Table Recovery | Best Used For |
+|---|---|---|
+| **Default Salt** | ⚠️ **Low** — Default salt is public in the open-source generator. If an attacker extracts integers and guesses the enum name, they can test common wordlists. | Prototyping and internal enums with no security sensitivity. |
+| **`seed: <int>`** | ⚠️ **Low** — 32-bit space ($2^{32} \approx 4.29 \times 10^9$) can be brute-forced in ~1.7 hours on a single CPU core and minutes on GPU. | Preventing accidental value collisions across different enums. |
+| **`key: '<secret>'`** | 🛡️ **Cryptographically Secure** — 128+ bit entropy makes dictionary and brute-force preimage attacks mathematically infeasible. | **Production security-sensitive enums (roles, entitlements, feature flags).** |
+
+> [!TIP]
+> **Build-Time Only Secrecy:** The `key` is used **exclusively at build time** by `build_runner` to compute 32-bit integer constants. It is **NEVER** emitted into the generated `*.g.dart` file and **NEVER** compiled into the binary.
+
+##### Generating a High-Entropy Secret Key
+
+Generate a 24-character random URL-safe secret in your terminal:
+```bash
+python3 -c "import secrets; print(secrets.token_urlsafe(24))"
+```
+
+##### Project-Wide Secret Key in `build.yaml` or CI Environment
+
+Instead of placing secret strings inside your Dart source files, you can define a repository-wide secret in `build.yaml`:
+
+```yaml
+targets:
+  $default:
+    builders:
+      stealth_enum_generator:stealth_enum:
+        options:
+          key: "YOUR_HIGH_ENTROPY_BUILD_SECRET"
+```
+
+Or pass it dynamically in CI via the `STEALTH_ENUM_KEY` environment variable without committing the secret to source control:
+
+```bash
+export STEALTH_ENUM_KEY="YOUR_HIGH_ENTROPY_BUILD_SECRET"
+dart run build_runner build --delete-conflicting-outputs
+```
+
+#### Core Architectural Guarantees
 
 1. **Non-Linear Avalanche Effect (Differential Attack Resistance)**:
    Because HMAC-SHA256 is a cryptographically secure pseudorandom function (PRF), XORing pairs of constants (`valA ^ valB`) does **not** cancel the key or enum name. Decompilers cannot perform differential wordlist recovery.
@@ -567,7 +607,7 @@ This model provides specific security and architectural guarantees:
 
 > [!IMPORTANT]
 > **Upgrading from 2.0.x / 2.1.0:**
-> Version 2.2.0 upgraded the hashing algorithm from linear FNV-1a to keyed HMAC-SHA256 to eliminate differential XOR recovery attacks. If your application persisted raw integer values from 2.0.x / 2.1.0 into databases or storage, annotate those constants with their existing hex values using `@StealthValue(0x...)` before regenerating.
+> Version 2.2.0 upgraded the hashing algorithm from linear FNV-1a to keyed HMAC-SHA256 to eliminate differential XOR recovery attacks. If your application persisted raw integer values from 2.0.x / 2.1.0 into databases or storage, annotate those constants with their existing hex values using `@StealthValue(0x...)` before regenerating. In 2.2.1, the HMAC derivation remains 100% backwards compatible with 2.2.0 with zero hash churn.
 
 ---
 
@@ -728,7 +768,7 @@ Actual benchmark terminal output:
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [PHASE 1/2] CONTROL TARGET: Compiling Standard Dart Enum to AOT...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-[OK] Control binary compiled: 5.5M
+[OK] Control binary compiled: 5.2M (symbols stripped to separate file)
 
 Scanning control binary for standard enum strings...
   [CONFIRMED LEAK] Standard enum identifier 'superAdmin' FOUND in AOT binary
@@ -738,15 +778,15 @@ Scanning control binary for standard enum strings...
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 [PHASE 2/2] STEALTH TARGET: Compiling @StealthEnum to AOT...    
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
-Resolving dependencies & compiling stealth binary...
-[OK] Stealth binary compiled: 5.5M
+Resolving dependencies & compiling stealth binary (with -S symbols stripped)...
+[OK] Stealth binary compiled: 5.2M (symbols stripped to separate file)
 
 Scanning stealth binary for private enum identifiers...
   [PASS] Sensitive string ABSENT from binary: 'superAdmin'
+  [PASS] Sensitive string ABSENT from binary: 'trial'
+  [PASS] Sensitive string ABSENT from binary: 'cancelled'
   [PASS] Sensitive string ABSENT from binary: '_SecurityClearance'
-  [PASS] Sensitive string ABSENT from binary: 'SecurityClearance.superAdmin'
   [PASS] Sensitive string ABSENT from binary: '_SubscriptionStatus'
-  [PASS] Sensitive string ABSENT from binary: 'SubscriptionStatus.cancelled'
 
 ══════════════════════════════════════════════════════════════
 BENCHMARK RESULTS SUMMARY:
@@ -767,7 +807,8 @@ This benchmark also runs automatically in **GitHub Actions CI on every commit an
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `name` | `String?` | `null` | Custom name for the generated extension type. Defaults to stripping the leading `_` from the enum name. |
-| `seed` | `int?` | `null` | Custom 32-bit integer seed for customizing the deterministic FNV-1a distribution. |
+| `key` | `String?` | `null` | High-entropy secret key string for cryptographic HMAC-SHA256 derivation. Prevents dictionary/rainbow-table reversal of constant names from decompiled binaries. Can also be configured repository-wide in `build.yaml` or via `STEALTH_ENUM_KEY`. |
+| `seed` | `int?` | `null` | Custom 32-bit integer seed for deterministic salt customization. Note: 32-bit seeds can be brute-forced; use `key` for cryptographic secrecy. |
 | `generateWhen` | `bool` | `true` | When `true`, generates `.when()` and `.maybeWhen()` inlined pattern matching helpers. |
 | `generateLabel` | `bool` | `false` | When `true`, generates `.label` and `byLabel()` helpers. **Emits string literals into the binary — read the security trade-off above.** |
 
@@ -799,7 +840,7 @@ This benchmark also runs automatically in **GitHub Actions CI on every commit an
 - **Tree-Shaking:** Because the source enum `_SecurityClearance` is private to the file and never instantiated, the Dart AOT compiler completely removes the original enum declaration, its string names, and metadata from the compiled binary.
 - **Decompiler Neutralization:** Conventional decompilers (Blutter, Ghidra) look for string tables and incremental switch jump tables (`0, 1, 2, ...`). With `stealth_enum`, they see isolated integer comparisons (`CMP W0, #0x7C06254C`) scattered across inlined call sites.
 - **Fail-Closed Security (No String Leaks):** All cases in `.when()` match explicit hex values, and the wildcard branch `_ => throw StateError('')` fails closed on unknown or corrupted values without leaking any string literals into the binary.
-- **Deterministic FNV-1a Hashing:** Values are derived using a 32-bit FNV-1a hash combining `publicName`, `fieldName`, and an optional seed. Each constant is calculated independently, guaranteeing that adding or removing variants never shifts existing constants' values. Exact numbers can also be frozen with `@StealthValue`.
+- **Cryptographic Keyed HMAC-SHA256 Hashing:** Values are derived using HMAC-SHA256 over `'$publicName::$fieldName'` with an optional secret key, seed, or default salt. Because HMAC-SHA256 is a cryptographically secure pseudorandom function (PRF) with full avalanche effect, XOR differential attacks cannot recover names or cancel the key. Each constant is calculated independently, guaranteeing that adding, removing, or reordering variants never shifts untouched constants' values. Exact numbers can also be frozen with `@StealthValue`.
 
 ## Running the example
 

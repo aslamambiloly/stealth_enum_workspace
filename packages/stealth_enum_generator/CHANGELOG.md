@@ -1,3 +1,13 @@
+## 2.2.1
+
+### Improvements & Hardening
+* Added support for project-wide secret keys via `build.yaml` (`options.config['key']`) and `STEALTH_ENUM_KEY` CI environment variable.
+* Added `'fromRawValue'` to `_reservedNames` validation set to prevent constructor collisions when defining enum constants.
+* Hardened empirical AOT verification script (`scripts/verify_aot_strings.sh`) with `-S <symbols>` to strip debug symbols on Dart AOT compiles and added real Flutter arm64 APK inspection support.
+* Comprehensive unit tests covering `defaultKey` options and `fromRawValue` collision validation.
+* Requires `stealth_enum: ">=2.2.1 <3.0.0"`.
+* **Zero hash churn**: preserves exact 2.2.0 HMAC-SHA256 derivation for existing constants.
+
 ## 2.2.0
 
 ### Security & Hardening

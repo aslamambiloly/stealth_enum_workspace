@@ -10,7 +10,7 @@ In Flutter, standard enums retain their plain-text names (`.name` and `.toString
 
 - **Dart SDK:** `>=3.3.0 <4.0.0`
 - **Flutter:** `>=3.19.0`
-- **Current stable version:** `2.2.0`
+- **Current stable version:** `2.2.1`
 - **Packages on pub.dev:**
   - `stealth_enum`: https://pub.dev/packages/stealth_enum (Annotations)
   - `stealth_enum_generator`: https://pub.dev/packages/stealth_enum_generator (Builder)
@@ -33,11 +33,11 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.0
+  stealth_enum: ^2.2.1
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.0
+  stealth_enum_generator: ^2.2.1
 ```
 
 Run:
@@ -182,12 +182,13 @@ class UserRoleConverter implements JsonConverter<UserRole, int> {
 6. **Per-Constant Independence:** Each constant's value is derived independently. Adding, removing, or reordering other constants never shifts existing values.
 7. **@StealthValue for Absolute Persistence:** For production databases and external API contracts, `@StealthValue(0x10000001)` freezes exact positive 32-bit values permanently, immune to renames and SDK changes. Values must be >= 0x1000 to prevent trivial sequential jump tables.
 8. **Private Enum Enforcement:** `@StealthEnum` requires a private enum with a leading underscore (`_`). Public enums are rejected at build-time because Dart AOT would preserve their string tables for reflection.
-9. **generateLabel trade-off:** When `generateLabel: true`, the generator emits string literals for `.label` and `byLabel()`. These strings **will appear in AOT binaries**. The private source enum is still fully erased, but the generated labels reintroduce readable names. Only enable when human-readable debugging or display labels are required.
+9. **Reserved Names Protection:** Identifiers that collide with generated members or constructors (`when`, `maybeWhen`, `rawValue`, `values`, `isValid`, `fromRawValue`, `tryFromRawValue`, `fromJson`, `toJson`, `label`, `byLabel`, `orElse`) are strictly rejected at build time.
+10. **generateLabel trade-off:** When `generateLabel: true`, the generator emits string literals for `.label` and `byLabel()`. These strings **will appear in AOT binaries**. The private source enum is still fully erased, but the generated labels reintroduce readable names. Only enable when human-readable debugging or display labels are required.
 
 ## API Options
 
-- `@StealthEnum(key: String?)`: Secret key / salt string for keyed HMAC-SHA256 derivation.
-- `@StealthEnum(seed: int?)`: Integer seed for keyed HMAC-SHA256 derivation.
+- `@StealthEnum(key: String?)`: Secret key string for HMAC-SHA256 derivation. Recommended for cryptographic security against dictionary attacks. Can also be set repository-wide in `build.yaml` or via `STEALTH_ENUM_KEY`.
+- `@StealthEnum(seed: int?)`: 32-bit integer seed for deterministic salt customization. Note: 32-bit seeds can be brute-forced; use `key:` for cryptographic secrecy.
 - `@StealthEnum(generateWhen: bool)`: Toggle `.when()` and `.maybeWhen()` generation (default: `true`).
 - `@StealthEnum(name: String?)`: Custom name for public extension type (default: strips leading `_`).
 - `@StealthEnum(generateLabel: bool)`: Enable `.label` and `byLabel()` string helpers (default: `false`). Emits string literals into binary.
@@ -195,6 +196,6 @@ class UserRoleConverter implements JsonConverter<UserRole, int> {
 
 ## Migration from 2.0.x / 2.1.0
 
-Version 2.2.0 upgraded the default hashing algorithm from linear FNV-1a to keyed HMAC-SHA256 to eliminate differential XOR recovery attacks. If your application persisted raw integer values from 2.0.x / 2.1.0 into databases or storage, annotate those constants with their existing hex values using `@StealthValue(0x...)` before regenerating.
+Version 2.2.0 upgraded the default hashing algorithm from linear FNV-1a to keyed HMAC-SHA256 to eliminate differential XOR recovery attacks. If your application persisted raw integer values from 2.0.x / 2.1.0 into databases or storage, annotate those constants with their existing hex values using `@StealthValue(0x...)` before regenerating. In 2.2.1, the HMAC derivation is 100% backwards compatible with 2.2.0 with zero hash churn.
 
 

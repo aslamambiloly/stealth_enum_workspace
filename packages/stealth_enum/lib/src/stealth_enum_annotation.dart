@@ -26,26 +26,26 @@ import 'package:meta/meta_meta.dart';
 /// inlined `.when()` / `.maybeWhen()` exhaustive helpers.
 @Target({TargetKind.enumType})
 final class StealthEnum {
-  /// Optional fixed integer seed for customizing the deterministic generation.
+  /// Optional fixed integer seed for reproducible builds.
   ///
-  /// The generator uses HMAC-SHA256 keyed with this seed (or [key] if provided)
-  /// over `'$publicName::$fieldName'`. Because values are derived independently
-  /// per constant via a cryptographically keyed pseudorandom function (PRF),
-  /// adding, removing, or reordering other constants does not shift the values
-  /// of existing constants, and XOR differential attacks cannot recover names.
-  ///
-  /// For exact, frozen raw integer values that must never change even across
-  /// renames, use the [@StealthValue] annotation on individual constants.
+  /// **Security Note**: A 32-bit integer seed has a limited key space that can be
+  /// brute-forced against common dictionary words. For security-sensitive enums
+  /// (licensing, paywalls, admin gates), use [key] with a high-entropy secret string
+  /// instead of [seed].
   final int? seed;
 
-  /// Optional secret key or salt string for HMAC-SHA256 derivation.
+  /// Secret key string for HMAC-SHA256 derivation.
   ///
-  /// When provided, the generator derives constant values using HMAC-SHA256
-  /// keyed with this secret string over `'$publicName::$fieldName'`.
+  /// Recommended for all security-sensitive enums. When provided, constants
+  /// are derived using HMAC-SHA256 keyed with this secret string over
+  /// `'$publicName::$fieldName'`.
   ///
   /// Because HMAC-SHA256 satisfies the strict avalanche criterion, knowledge
   /// of raw constants does NOT leak enum or constant names, and differential
   /// attacks (such as XORing pairs of constants) cannot cancel out the key.
+  ///
+  /// Can also be configured globally in `build.yaml` or via the `STEALTH_ENUM_KEY`
+  /// environment variable to avoid committing secrets into source control.
   final String? key;
 
   /// Whether to generate `.when()` and `.maybeWhen()` exhaustive helper
