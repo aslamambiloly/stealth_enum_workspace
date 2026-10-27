@@ -1,4 +1,16 @@
+## 2.0.0
+
+### New Features
+* Added `generateLabel` annotation parameter (default `false`). When enabled, the generator emits `.label` getter, `byLabel(String)`, `toJson()`, and `fromJson(int)` helpers — equivalent to `.name`, `byName()`, and JSON converters on standard enums.
+* Added comprehensive **Migration Guide** in README covering pattern matching, JSON serialization (including `json_serializable` custom converter pattern), logging, persistence, and side-by-side standard enum → stealth_enum cheatsheet.
+* Added **AOT Verification Script** (`scripts/verify_aot_strings.sh`) that compiles the example to a native AOT binary and asserts all enum identifier strings are absent using the `strings` CLI tool.
+* Updated feature table to include Safe Parsing row comparing `tryFromRawValue` vs `byName` (which throws on unknown values).
+
+### Breaking Changes
+* Generator version constraint updated: `stealth_enum_generator: ^2.0.0` requires `stealth_enum: ^2.0.0`. Update both packages together.
+
 ## 1.0.5
+
 
 * Added `tryFromRawValue()` for safe, null-returning parsing of untrusted inputs (APIs, JSON, databases) to prevent runtime crashes.
 * Added `isValid` boolean getter to verify if an instance holds a recognized enum variant.

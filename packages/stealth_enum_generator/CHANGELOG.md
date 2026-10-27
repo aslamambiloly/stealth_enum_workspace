@@ -1,4 +1,11 @@
+## 2.0.0
+
+* Added `generateLabel` code path in `StealthEnumGenerator`. When `@StealthEnum(generateLabel: true)`, the generator emits `.label` getter, `byLabel(String)`, `toJson()`, and `fromJson(int)` helpers alongside the existing int-backed extension type.
+* Added inline security comment block in generated label section explaining the string-in-binary trade-off.
+* Requires `stealth_enum: ^2.0.0`.
+
 ## 1.0.5
+
 
 * Added `tryFromRawValue()` generation for safe, null-returning integer parsing.
 * Added `isValid` boolean getter generation for variant validation.

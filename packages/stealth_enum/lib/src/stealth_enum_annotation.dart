@@ -49,14 +49,34 @@ final class StealthEnum {
   /// parameter to specify an explicit name instead.
   final String? name;
 
+  /// Whether to generate label-based ergonomic helpers: `.label`, `byLabel()`,
+  /// `toJson()`, and `fromJson()`. Defaults to `false`.
+  ///
+  /// **Security trade-off**: Enabling this emits human-readable label strings
+  /// (e.g. `'admin'`, `'superAdmin'`) into the generated `.g.dart` file, which
+  /// **will appear in the compiled binary**. The private source enum's strings
+  /// are still fully erased, but the generated labels re-introduce readable
+  /// identifiers. Only enable this when you genuinely need serialization or
+  /// logging and you understand the trade-off.
+  ///
+  /// When enabled, the generated type gains:
+  /// - `.label` → `String` name of the current variant (e.g. `'admin'`).
+  /// - `byLabel(String)` → `T?` Looks up a variant by its label string.
+  /// - `toJson()` → `int` Serializes to the raw integer value.
+  /// - `fromJson(int)` → `T?` Deserializes from a raw integer (alias for
+  ///   `tryFromRawValue`).
+  final bool generateLabel;
+
   /// Creates a [StealthEnum] annotation.
   ///
   /// Specify [seed] for deterministic integer generation, [generateWhen] to
-  /// enable or disable `.when()` / `.maybeWhen()` helper generation, or [name]
-  /// to override the generated public extension type name.
+  /// enable or disable `.when()` / `.maybeWhen()` helper generation, [name]
+  /// to override the generated public extension type name, or [generateLabel]
+  /// to enable serialization and logging helpers.
   const StealthEnum({
     this.seed,
     this.generateWhen = true,
     this.name,
+    this.generateLabel = false,
   });
 }

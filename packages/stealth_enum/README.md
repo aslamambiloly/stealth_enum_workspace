@@ -6,7 +6,6 @@
   <a href="https://flutter.dev"><img src="https://img.shields.io/badge/Flutter-3.19%2B-blue?logo=flutter" alt="Flutter"></a>
   <br>
   <a href="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace"><img src="https://codecov.io/gh/aslamambiloly/stealth_enum_workspace/graph/badge.svg" alt="codecov"></a>
-  <!-- <a href="https://app.codacy.com/gh/aslamambiloly/stealth_enum_workspace/dashboard"><img src="https://app.codacy.com/project/badge/Grade/stealth_enum_workspace" alt="Codacy Badge"></a> -->
 </p>
 
 <p align="center">
@@ -51,6 +50,7 @@ CMP W0, #0x1D55A9C3
 Not much! Just make your enums private and add `@StealthEnum()` annotation to it just like the image below:
 
 
+
 <p>
   <img src="https://raw.githubusercontent.com/aslamambiloly/stealth_enum_workspace/main/doc/difference-rounded.png" width="550" alt="Code difference"/>
 </p>
@@ -86,7 +86,16 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
   - [Custom seed for deterministic builds](#custom-seed-for-deterministic-builds)
   - [Custom type name](#custom-type-name)
   - [Safe Parsing & Zero-Crash Architecture](#safe-parsing--zero-crash-architecture)
+  - [Serialization & Logging (generateLabel)](#serialization--logging-generatelabel)
+- [Migration Guide](#migration-guide)
+  - [Step-by-step migration from standard enum](#step-by-step-migration-from-standard-enum)
+  - [Pattern matching](#pattern-matching)
+  - [Serialization / JSON](#serialization--json)
+  - [Logging & debugging](#logging--debugging)
+  - [Persistence & version safety](#persistence--version-safety)
+  - [Common patterns side-by-side](#common-patterns-side-by-side)
 - [Generated Output](#generated-output)
+- [AOT Verification](#aot-verification)
 - [API Reference](#api-reference)
   - [`@StealthEnum`](#stealthenum)
   - [Generated Extension Type](#generated-extension-type)
@@ -112,7 +121,9 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
 - **No `StateError` String Leaks**: The fallback branch in `.when()` uses a wildcard `_ =>` rather than throwing an exception with class names.
 - **Guaranteed Tree-Shaking**: The private annotated enum (`_MyEnum`) is discarded by the compiler; only the lightweight extension type remains.
 - **Deterministic CI Builds**: Optional compile-time `seed` parameter guarantees reproducible builds across team members and CI pipelines.
+- **Standard Enum Ergonomics**: `.values`, equality (`==`), exhaustive `.when()`, safe `tryFromRawValue()`, and optional `.label` / `byLabel()` / `toJson()` / `fromJson()` for serialization scenarios.
 - **Pure Dart**: Zero native code, zero CocoaPods or Gradle headaches.
+- **AOT Verification Script**: Included shell script proves string removal empirically on your own machine.
 
 <div align="center">
 
@@ -122,6 +133,7 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
 | **Index Pattern** | Sequential `0, 1, 2, 3` (jump tables) | Non-sequential 32-bit hex (`0x4B91E20A`) |
 | **Runtime Cost** | Wrapper object allocation | **Zero** (erases to raw primitive `int`) |
 | **Exhaustive Matching** | Native `switch` statement | Inlined `.when()` / `.maybeWhen()` |
+| **Safe Parsing** | `.values.byName()` throws on unknown | `tryFromRawValue()` returns null |
 | **Decompiler Visibility** | Anchors for REA & Ghidra | Indistinguishable from random constants |
 | **Tree-Shaking** | Kept in binary | **100% tree-shaken** (private source enum) |
 
@@ -134,11 +146,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^1.0.0
+  stealth_enum: ^2.0.0
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^1.0.0
+  stealth_enum_generator: ^2.0.0
 ```
 
 Then run:
@@ -287,6 +299,242 @@ if (role.isValid) {
 #### 5. Fail-Closed Security
 If an invalid raw integer reaches `.when()`, it fails closed by throwing `StateError('')` rather than accidentally granting unauthorized privileges to the last branch.
 
+### Serialization & Logging (`generateLabel`)
+
+By default, `stealth_enum` emits **zero string literals** — not even the constant names appear in the binary. For use cases where you need serialization, logging, or human-readable output, enable `generateLabel`:
+
+> **Security trade-off**: Enabling `generateLabel: true` emits the constant name strings (e.g. `'admin'`, `'superAdmin'`) into the compiled binary via the generated `.g.dart` file. The private source enum's strings are still fully erased, but the generated labels re-introduce readable identifiers. Only enable this when you genuinely need serialization or logging.
+
+```dart
+@StealthEnum(generateLabel: true)
+enum _UserRole {
+  viewer,
+  editor,
+  admin,
+}
+```
+
+This generates additional helpers on the extension type:
+
+```dart
+// .label — equivalent to .name on a standard enum
+print(UserRole.admin.label);     // → 'admin'
+
+// byLabel() — equivalent to UserRole.values.byName()
+final role = UserRole.byLabel('editor'); // → UserRole.editor (or null)
+
+// toJson() / fromJson() — for JSON serialization
+final json = {'role': UserRole.admin.toJson()}; // → {'role': 2128183628}
+final restored = UserRole.fromJson(json['role'] as int);  // → UserRole.admin
+```
+
+---
+
+## Migration Guide
+
+> This guide shows you how to migrate from standard Dart enums to `stealth_enum` step by step, with side-by-side comparisons for the most common patterns.
+
+### Step-by-step migration from standard enum
+
+**Before** (standard enum):
+```dart
+// user_role.dart
+enum UserRole {
+  viewer,
+  editor,
+  admin,
+}
+```
+
+**After** (stealth_enum):
+```dart
+// user_role.dart
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'user_role.g.dart';   // ← add this
+
+@StealthEnum()             // ← annotate
+enum _UserRole {           // ← make private (add _)
+  viewer,
+  editor,
+  admin,
+}
+```
+
+Then run:
+```bash
+dart run build_runner build --delete-conflicting-outputs
+```
+
+The generator produces `user_role.g.dart` with a `UserRole` extension type. **Your call sites need zero changes** for equality checks and `.values` iteration.
+
+---
+
+### Pattern matching
+
+| Standard enum | stealth_enum |
+|---|---|
+| `switch (role) { case UserRole.admin: ... }` | `role.when(admin: () => ..., viewer: () => ..., editor: () => ...)` |
+| Non-exhaustive `switch` (compile warning) | Non-exhaustive → use `.maybeWhen(orElse: ...)` |
+| `role == UserRole.admin` | `role == UserRole.admin` ✓ (unchanged) |
+
+```dart
+// Standard enum switch
+switch (role) {
+  case UserRole.admin:
+    showAdminPanel();
+  default:
+    showDefaultView();
+}
+
+// stealth_enum equivalent (exhaustive — compiler forces all cases)
+role.when(
+  viewer: () => showDefaultView(),
+  editor: () => showDefaultView(),
+  admin: () => showAdminPanel(),
+);
+
+// stealth_enum partial match (use maybeWhen for non-exhaustive)
+role.maybeWhen(
+  admin: () => showAdminPanel(),
+  orElse: () => showDefaultView(),
+);
+```
+
+---
+
+### Serialization / JSON
+
+Standard enums are often serialized as strings (`.name`) or indices (`.index`). **Do not use `.index` with stealth_enum** — the raw values are not sequential integers. Always use `.rawValue` / `tryFromRawValue()`.
+
+```dart
+// ── Serializing ──────────────────────────────────────────────────────────────
+
+// Standard enum — serialized as string (fragile if enum is renamed)
+final json = {'role': role.name}; // → {'role': 'admin'}
+
+// stealth_enum — serialize as raw int (opaque, rename-safe)
+final json = {'role': role.rawValue}; // → {'role': 2128183628}
+
+// ── Deserializing ────────────────────────────────────────────────────────────
+
+// Standard enum — throws if string doesn't match
+final role = UserRole.values.byName(json['role'] as String);
+
+// stealth_enum — returns null on unknown value (safe)
+final role = UserRole.tryFromRawValue(json['role'] as int)
+    ?? UserRole.viewer; // safe default
+
+// ── With generateLabel: true (optional, see security trade-off) ──────────────
+// toJson / fromJson helpers mirror json_serializable conventions:
+final json = {'role': role.toJson()};             // int
+final role = UserRole.fromJson(json['role'] as int); // T?
+```
+
+> **Persistence tip**: Always store the raw integer value alongside a schema version. If you ever change the enum names or re-generate with a different seed, you can migrate stored values using the old hex constants directly.
+
+#### Working with `json_serializable`
+
+`stealth_enum` is compatible with `json_serializable`. Use a custom converter:
+
+```dart
+import 'package:json_annotation/json_annotation.dart';
+import 'user_role.dart';
+
+class UserRoleConverter implements JsonConverter<UserRole, int> {
+  const UserRoleConverter();
+
+  @override
+  UserRole fromJson(int json) =>
+      UserRole.tryFromRawValue(json) ?? UserRole.viewer;
+
+  @override
+  int toJson(UserRole role) => role.rawValue;
+}
+
+@JsonSerializable()
+class UserProfile {
+  @UserRoleConverter()
+  final UserRole role;
+
+  const UserProfile({required this.role});
+  factory UserProfile.fromJson(Map<String, dynamic> json) =>
+      _$UserProfileFromJson(json);
+  Map<String, dynamic> toJson() => _$UserProfileToJson(this);
+}
+```
+
+---
+
+### Logging & debugging
+
+Without `generateLabel`, `.toString()` on an extension type returns the raw integer. For logging:
+
+```dart
+// Option A: Use .rawValue in logs (most secure — no strings in binary)
+log('User role changed to rawValue=${role.rawValue}');
+
+// Option B: Enable generateLabel: true and use .label (strings appear in binary)
+@StealthEnum(generateLabel: true)
+enum _UserRole { viewer, editor, admin }
+
+log('User role changed to ${role.label}'); // → 'admin'
+
+// Option C: Manual map in your own code (strings only in your file, not enum)
+const _roleNames = {
+  UserRole.viewer: 'Viewer',
+  UserRole.editor: 'Editor',
+  UserRole.admin: 'Administrator',
+};
+log('User role changed to ${_roleNames[role]}');
+```
+
+---
+
+### Persistence & version safety
+
+> ⚠️ **Important**: The raw integer values are derived from your enum name + constant names + optional seed. If you rename the **generated type** or constants, the values change on the next `build_runner` run. Stored values in databases or shared preferences will become unreadable.
+
+**To keep values stable across renames**:
+1. Always use an explicit `seed`:
+   ```dart
+   @StealthEnum(seed: 0xCAFEBABE)   // fixes all values forever
+   enum _UserRole { viewer, editor, admin }
+   ```
+2. Or capture the current hex values and add a migration:
+   ```dart
+   // Migration: old 'editor' value was 0x3A12C04F, new is 0x5B87D12A
+   static UserRole migrateFromV1(int storedValue) {
+     if (storedValue == 0x3A12C04F) return UserRole.editor; // old value
+     return UserRole.tryFromRawValue(storedValue) ?? UserRole.viewer;
+   }
+   ```
+3. Store a schema version alongside the value:
+   ```dart
+   prefs.setInt('role', role.rawValue);
+   prefs.setInt('role_schema_version', 2); // bump on seed change
+   ```
+
+---
+
+### Common patterns side-by-side
+
+```dart
+// ┌─────────────────────────────┬──────────────────────────────────────────────┐
+// │  Standard Dart enum         │  stealth_enum                                │
+// ├─────────────────────────────┼──────────────────────────────────────────────┤
+// │  role == UserRole.admin     │  role == UserRole.admin          (same ✓)   │
+// │  UserRole.values            │  UserRole.values                 (same ✓)   │
+// │  role.index                 │  role.rawValue                   (int)       │
+// │  role.name                  │  role.label  (needs generateLabel: true)     │
+// │  UserRole.values.byName(s)  │  UserRole.byLabel(s)            (returns T?)│
+// │  UserRole.values[i]         │  UserRole.tryFromRawValue(i)    (returns T?)│
+// │  switch (role) { ... }      │  role.when(...)   or  role.maybeWhen(...)    │
+// └─────────────────────────────┴──────────────────────────────────────────────┘
+```
+
+---
+
 ## Generated Output
 
 Here is what `stealth_enum_generator` produces in `security_clearance.g.dart`:
@@ -353,14 +601,78 @@ extension type const SecurityClearance._(int rawValue) {
     required T Function() orElse,
   }) {
     return switch (rawValue) {
-      0x373D1B37 => guest != null ? guest() : orElse(),
-      0x764AE932 => operator != null ? operator() : orElse(),
-      0x7C06254C => admin != null ? admin() : orElse(),
-      0x3154C03F => superAdmin != null ? superAdmin() : orElse(),
+      0x373D1B37 when guest != null => guest(),
+      0x764AE932 when operator != null => operator(),
+      0x7C06254C when admin != null => admin(),
+      0x3154C03F when superAdmin != null => superAdmin(),
       _ => orElse(),
     };
   }
 }
+```
+
+With `generateLabel: true`, the following helpers are also generated:
+
+```dart
+  // String labels appear in the compiled binary when generateLabel: true.
+  String get label => switch (rawValue) {
+    0x373D1B37 => 'guest',
+    0x764AE932 => 'operator',
+    0x7C06254C => 'admin',
+    0x3154C03F => 'superAdmin',
+    _ => 'unknown($rawValue)',
+  };
+
+  static SecurityClearance? byLabel(String label) { ... }
+  int toJson() => rawValue;
+  static SecurityClearance? fromJson(int json) => tryFromRawValue(json);
+```
+
+## AOT Verification
+
+The workspace ships a verification script that **proves empirically** that none of the enum identifier strings appear in the compiled AOT binary:
+
+```bash
+cd /path/to/stealth_enum_workspace
+bash scripts/verify_aot_strings.sh
+```
+
+**What it does:**
+1. Regenerates `.g.dart` files via `build_runner`
+2. Compiles the example app to a native AOT binary with `dart compile exe`
+3. Runs `strings` on the resulting binary
+4. Asserts that `"guest"`, `"operator"`, `"admin"`, `"superAdmin"`, `"_SecurityClearance"`, etc. are **absent**
+5. Prints a clear `[PASS]` / `[FAIL]` per string
+
+**Requirements**: Dart SDK >= 3.3.0 and the `strings` CLI (built-in on macOS/Linux, `sudo apt install binutils` on Ubuntu).
+
+Example output:
+```
+╔══════════════════════════════════════════════════════════╗
+║       stealth_enum  AOT String Removal Verifier          ║
+╚══════════════════════════════════════════════════════════╝
+
+[STEP 1/3] Regenerating .g.dart files via build_runner...
+[OK]     Code generation complete.
+
+[STEP 2/3] Compiling AOT binary with --obfuscate...
+[OK]     Binary compiled: .aot_verify_build/stealth_enum_verify
+          Size: 5.1M
+
+[STEP 3/3] Scanning binary for sensitive enum strings...
+
+  [PASS] String absent from binary: 'guest'
+  [PASS] String absent from binary: 'operator'
+  [PASS] String absent from binary: 'admin'
+  [PASS] String absent from binary: 'superAdmin'
+  [PASS] String absent from binary: '_SecurityClearance'
+  ...
+
+══════════════════════════════════════════════════════════
+  ✓ ALL 12 CHECKS PASSED
+    None of the enum identifiers appear in the AOT binary.
+    stealth_enum is working correctly.
+══════════════════════════════════════════════════════════
 ```
 
 ## API Reference
@@ -370,8 +682,9 @@ extension type const SecurityClearance._(int rawValue) {
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `name` | `String?` | `null` | Custom name for the generated extension type. Defaults to stripping the leading `_` from the enum name. |
-| `seed` | `int?` | `null` | Custom 32-bit integer seed for deterministic value generation across builds. |
+| `seed` | `int?` | `null` | Custom 32-bit integer seed for deterministic value generation across builds. Recommended for long-lived persistent enums. |
 | `generateWhen` | `bool` | `true` | When `true`, generates `.when()` and `.maybeWhen()` pattern matching helpers. |
+| `generateLabel` | `bool` | `false` | When `true`, generates `.label`, `byLabel()`, `toJson()`, and `fromJson()` helpers. **Emits string literals into the binary — read the security trade-off above.** |
 
 ### Generated Extension Type
 
@@ -382,8 +695,12 @@ extension type const SecurityClearance._(int rawValue) {
 | `fromRawValue(int)` | `const factory` | Creates an extension type instance from a raw integer value. |
 | `tryFromRawValue(int)` | `static T?` | Safely parses a raw integer, returning `null` if unknown (zero crashes). |
 | `isValid` | `bool` | Returns `true` if this instance holds a recognized enum variant. |
-| `when<T>(...)` | `T Function(...)` | Inlined exhaustive pattern matching covering all variants. Fails closed. |
+| `when<T>(...)` | `T Function(...)` | Inlined exhaustive pattern matching covering all variants. Fails closed on unknown values. |
 | `maybeWhen<T>(...)` | `T Function(...)` | Inlined non-exhaustive pattern matching with a required `orElse` fallback. |
+| `label` | `String` | *(generateLabel: true)* Human-readable name of the variant. Equivalent to `.name` on a standard enum. |
+| `byLabel(String)` | `static T?` | *(generateLabel: true)* Looks up a variant by its label string. Returns `null` if not found. |
+| `toJson()` | `int` | *(generateLabel: true)* Serializes to raw integer for JSON/storage. |
+| `fromJson(int)` | `static T?` | *(generateLabel: true)* Deserializes from a raw JSON integer. |
 
 ## Under the Hood
 
@@ -391,6 +708,7 @@ extension type const SecurityClearance._(int rawValue) {
 - **Tree-Shaking:** Because the source enum `_SecurityClearance` is private to the file and never instantiated, the Dart AOT compiler completely removes the original enum declaration, its string names, and metadata from the compiled binary.
 - **Decompiler Neutralization:** Conventional decompilers (Blutter, Ghidra) look for string tables and incremental switch jump tables (`0, 1, 2, ...`). With `stealth_enum`, they see isolated integer comparisons (`CMP W0, #0x7C06254C`) scattered across inlined call sites.
 - **Fail-Closed Security (No String Leaks):** All cases in `.when()` match explicit hex values, and the wildcard branch `_ => throw StateError('')` fails closed on unknown or corrupted values without leaking any string literals into the binary.
+- **Deterministic Values:** Values are seeded from `publicName.hashCode ^ fieldName.hashCode ^ 0xDEADBEEF` (or a user-provided seed). This means the same source code always produces the same hex values, keeping `git diff` clean in CI.
 
 ## Running the example
 
