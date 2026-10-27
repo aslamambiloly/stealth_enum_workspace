@@ -23,11 +23,11 @@ Add `stealth_enum_generator` to your `dev_dependencies` alongside `build_runner`
 
 ```yaml
 dependencies:
-  stealth_enum: ^1.0.0
+  stealth_enum: ^2.0.0
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^1.0.0
+  stealth_enum_generator: ^2.0.0
 ```
 
 Then run:

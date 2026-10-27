@@ -396,16 +396,18 @@ packages:
   stealth_enum:
     dependency: "direct main"
     description:
-      path: "../packages/stealth_enum"
-      relative: true
-    source: path
+      name: stealth_enum
+      sha256: bf4ec023c41add42c21a457a8fbd78efc446c7a3cf7d06b950fb2a3f1d3c522b
+      url: "https://pub.dev"
+    source: hosted
     version: "2.0.0"
   stealth_enum_generator:
     dependency: "direct dev"
     description:
-      path: "../packages/stealth_enum_generator"
-      relative: true
-    source: path
+      name: stealth_enum_generator
+      sha256: "87e3b94aac7888eb77cc4f66ffecc28c75de179eaef1ee74ea9f4e85541c2fb8"
+      url: "https://pub.dev"
+    source: hosted
     version: "2.0.0"
   stream_channel:
     dependency: transitive
