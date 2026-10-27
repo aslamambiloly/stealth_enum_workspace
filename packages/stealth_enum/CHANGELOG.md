@@ -1,3 +1,10 @@
+## 2.2.3
+
+### Fixes & Compatibility
+* **Dependency lower bounds**: Raised `meta` dependency lower-bound constraint to `>=1.14.0 <2.0.0` (from `>=1.9.0`) so that `TargetKind.enumValue` is recognized during `dart pub downgrade`, resolving pana downgrade analysis errors and achieving a 160/160 pub score.
+* **Documentation**: Cleaned up dartdoc bracket references to eliminate all doc generation warnings.
+* **Zero hash churn**: 100% byte-for-byte backwards compatible with 2.2.0, 2.2.1, and 2.2.2.
+
 ## 2.2.2
 
 ### Security & CI Transparency

@@ -158,7 +158,8 @@ enum _PaymentGateway {
               contains(
                   'static const PaymentGateway applePay = PaymentGateway._(0x7F000002);'),
               // googlePay derives its value automatically
-              contains('static const PaymentGateway googlePay = PaymentGateway._('),
+              contains(
+                  'static const PaymentGateway googlePay = PaymentGateway._('),
             ]),
           ),
         },
@@ -186,6 +187,31 @@ enum _KeyedStatus { pending, approved, rejected }
               contains('static const KeyedStatus pending = KeyedStatus._('),
               contains('static const KeyedStatus approved = KeyedStatus._('),
               contains('static const KeyedStatus rejected = KeyedStatus._('),
+            ]),
+          ),
+        },
+      );
+    });
+
+    test('seed parameter derives valid deterministic constants', () async {
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/seeded.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'seeded.g.dart';
+
+@StealthEnum(seed: 42)
+enum _SeededStatus { a, b }
+''',
+        }),
+        outputs: {
+          'a|lib/seeded.stealth_enum.g.part': decodedMatches(
+            allOf([
+              contains('extension type const SeededStatus._(int rawValue) {'),
+              contains('static const SeededStatus a = SeededStatus._('),
+              contains('static const SeededStatus b = SeededStatus._('),
             ]),
           ),
         },
@@ -234,9 +260,12 @@ enum _InternalClearance { low, high }
         outputs: {
           'a|lib/custom_name.stealth_enum.g.part': decodedMatches(
             allOf([
-              contains('extension type const RenamedClearance._(int rawValue) {'),
-              contains('static const RenamedClearance low = RenamedClearance._('),
-              contains('static const RenamedClearance high = RenamedClearance._('),
+              contains(
+                  'extension type const RenamedClearance._(int rawValue) {'),
+              contains(
+                  'static const RenamedClearance low = RenamedClearance._('),
+              contains(
+                  'static const RenamedClearance high = RenamedClearance._('),
             ]),
           ),
         },
@@ -263,14 +292,14 @@ enum _UserRole { guest, admin }
 ''',
         }),
         outputs: {
-          'a|lib/stable.stealth_enum.g.part': decodedMatches(
-              predicate<String>((content) {
-            final guestMatch =
-                RegExp(r'static const UserRole guest = UserRole\._\((0x[0-9A-Fa-f]+)\);')
-                    .firstMatch(content);
-            final adminMatch =
-                RegExp(r'static const UserRole admin = UserRole\._\((0x[0-9A-Fa-f]+)\);')
-                    .firstMatch(content);
+          'a|lib/stable.stealth_enum.g.part':
+              decodedMatches(predicate<String>((content) {
+            final guestMatch = RegExp(
+                    r'static const UserRole guest = UserRole\._\((0x[0-9A-Fa-f]+)\);')
+                .firstMatch(content);
+            final adminMatch = RegExp(
+                    r'static const UserRole admin = UserRole\._\((0x[0-9A-Fa-f]+)\);')
+                .firstMatch(content);
             expect(guestMatch, isNotNull);
             expect(adminMatch, isNotNull);
             originalGuestHex = guestMatch!.group(1);
@@ -294,14 +323,14 @@ enum _UserRole { guest, moderator, admin }
 ''',
         }),
         outputs: {
-          'a|lib/stable.stealth_enum.g.part': decodedMatches(
-              predicate<String>((content) {
-            final guestMatch =
-                RegExp(r'static const UserRole guest = UserRole\._\((0x[0-9A-Fa-f]+)\);')
-                    .firstMatch(content);
-            final adminMatch =
-                RegExp(r'static const UserRole admin = UserRole\._\((0x[0-9A-Fa-f]+)\);')
-                    .firstMatch(content);
+          'a|lib/stable.stealth_enum.g.part':
+              decodedMatches(predicate<String>((content) {
+            final guestMatch = RegExp(
+                    r'static const UserRole guest = UserRole\._\((0x[0-9A-Fa-f]+)\);')
+                .firstMatch(content);
+            final adminMatch = RegExp(
+                    r'static const UserRole admin = UserRole\._\((0x[0-9A-Fa-f]+)\);')
+                .firstMatch(content);
             // Must match original values exactly!
             expect(guestMatch?.group(1), equals(originalGuestHex),
                 reason:
@@ -366,6 +395,30 @@ enum PublicEnum { a, b }
       );
     });
 
+    test('logs error when enum has no constants', () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/empty.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'empty.g.dart';
+
+@StealthEnum()
+enum _EmptyEnum {}
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(
+            contains('@StealthEnum enum must have at least one constant')),
+      );
+    });
+
     test('logs error when duplicate @StealthValue is used in same enum',
         () async {
       final logs = <String>[];
@@ -417,11 +470,13 @@ enum _NegativeVal {
       );
       expect(
         logs,
-        anyElement(contains('Values must be positive 32-bit unsigned integers')),
+        anyElement(
+            contains('Values must be positive 32-bit unsigned integers')),
       );
     });
 
-    test('logs error when @StealthValue has trivial sequential value (< 0x1000)',
+    test(
+        'logs error when @StealthValue has trivial sequential value (< 0x1000)',
         () async {
       final logs = <String>[];
       await testBuilder(
@@ -449,7 +504,8 @@ enum _SmallVal {
       );
     });
 
-    test('logs error when constant collides with reserved member name (including fromRawValue)',
+    test(
+        'logs error when constant collides with reserved member name (including fromRawValue)',
         () async {
       final logs = <String>[];
       await testBuilder(
@@ -477,13 +533,16 @@ enum _ReservedVal {
       );
     });
 
-    test('stealthEnumBuilder derives exact HMAC values, emits key fingerprint, and differs from default salt', () async {
+    test(
+        'stealthEnumBuilder derives exact HMAC values, emits key fingerprint, and differs from default salt',
+        () async {
       const key = 'project_wide_ci_secret_key';
       final expectedActive = _expectedHex(key, 'SecretStatus', 'active');
       final expectedInactive = _expectedHex(key, 'SecretStatus', 'inactive');
       final defaultActive = _defaultSaltHex('SecretStatus', 'active');
       final defaultInactive = _defaultSaltHex('SecretStatus', 'inactive');
-      final expectedFp = sha256.convert(utf8.encode(key)).toString().substring(0, 8);
+      final expectedFp =
+          sha256.convert(utf8.encode(key)).toString().substring(0, 8);
 
       expect(expectedActive, isNot(equals(defaultActive)),
           reason: 'Keyed hash must differ from default salt');
@@ -507,15 +566,19 @@ enum _SecretStatus { active, inactive }
             allOf([
               contains('// Key fingerprint: $expectedFp'),
               contains('extension type const SecretStatus._(int rawValue) {'),
-              contains('static const SecretStatus active = SecretStatus._($expectedActive);'),
-              contains('static const SecretStatus inactive = SecretStatus._($expectedInactive);'),
+              contains(
+                  'static const SecretStatus active = SecretStatus._($expectedActive);'),
+              contains(
+                  'static const SecretStatus inactive = SecretStatus._($expectedInactive);'),
             ]),
           ),
         },
       );
     });
 
-    test('stealthEnumBuilder handles numeric key in config without cast exception', () async {
+    test(
+        'stealthEnumBuilder handles numeric key in config without cast exception',
+        () async {
       const numericKey = 12345;
       final expectedActive = _expectedHex('12345', 'NumStatus', 'active');
 
@@ -533,17 +596,20 @@ enum _NumStatus { active }
         }),
         outputs: {
           'a|lib/num_status.stealth_enum.g.part': decodedMatches(
-            contains('static const NumStatus active = NumStatus._($expectedActive);'),
+            contains(
+                'static const NumStatus active = NumStatus._($expectedActive);'),
           ),
         },
       );
     });
 
-    test('key precedence: enum-level key overrides global builder key', () async {
+    test('key precedence: enum-level key overrides global builder key',
+        () async {
       const globalKey = 'global_builder_key';
       const localKey = 'local_enum_key';
       final expectedLocal = _expectedHex(localKey, 'OverrideStatus', 'active');
-      final expectedGlobal = _expectedHex(globalKey, 'OverrideStatus', 'active');
+      final expectedGlobal =
+          _expectedHex(globalKey, 'OverrideStatus', 'active');
 
       expect(expectedLocal, isNot(equals(expectedGlobal)));
 
@@ -561,17 +627,20 @@ enum _OverrideStatus { active }
         }),
         outputs: {
           'a|lib/override_status.stealth_enum.g.part': decodedMatches(
-            contains('static const OverrideStatus active = OverrideStatus._($expectedLocal);'),
+            contains(
+                'static const OverrideStatus active = OverrideStatus._($expectedLocal);'),
           ),
         },
       );
     });
 
-    test('key precedence: global builder key overrides enum-level seed', () async {
+    test('key precedence: global builder key overrides enum-level seed',
+        () async {
       const globalKey = 'global_builder_key';
       const seed = 42;
       final expectedKeyed = _expectedHex(globalKey, 'SeededStatus', 'active');
-      final expectedSeeded = _expectedHex('stealth_enum:seed:$seed', 'SeededStatus', 'active');
+      final expectedSeeded =
+          _expectedHex('stealth_enum:seed:$seed', 'SeededStatus', 'active');
 
       expect(expectedKeyed, isNot(equals(expectedSeeded)));
 
@@ -589,7 +658,8 @@ enum _SeededStatus { active }
         }),
         outputs: {
           'a|lib/seeded_status.stealth_enum.g.part': decodedMatches(
-            contains('static const SeededStatus active = SeededStatus._($expectedKeyed);'),
+            contains(
+                'static const SeededStatus active = SeededStatus._($expectedKeyed);'),
           ),
         },
       );
@@ -614,11 +684,13 @@ enum _Unkeyed { active }
       );
       expect(
         logs,
-        anyElement(contains('requires a secret key for cryptographic security')),
+        anyElement(
+            contains('requires a secret key for cryptographic security')),
       );
     });
 
-    test('require_key: false logs warning when enum uses public default salt', () async {
+    test('require_key: false logs warning when enum uses public default salt',
+        () async {
       final logs = <String>[];
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),

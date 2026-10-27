@@ -32,7 +32,9 @@ void main() {
       expect(SecurityClearance.tryFromRawValue(0x12345678), isNull);
     });
 
-    test('isValid returns true for valid constants and false for invalid rawValue', () {
+    test(
+        'isValid returns true for valid constants and false for invalid rawValue',
+        () {
       for (final v in SecurityClearance.values) {
         expect(v.isValid, isTrue);
       }
@@ -42,8 +44,8 @@ void main() {
 
     test('inequality — different constants are not equal', () {
       expect(SecurityClearance.admin, isNot(equals(SecurityClearance.guest)));
-      expect(
-          SecurityClearance.operator, isNot(equals(SecurityClearance.superAdmin)));
+      expect(SecurityClearance.operator,
+          isNot(equals(SecurityClearance.superAdmin)));
     });
 
     test('extension type erases to int at runtime', () {
@@ -61,8 +63,7 @@ void main() {
     });
 
     test('raw values are unique (no collision)', () {
-      final rawValues =
-          SecurityClearance.values.map((v) => v.rawValue).toSet();
+      final rawValues = SecurityClearance.values.map((v) => v.rawValue).toSet();
       expect(rawValues.length, equals(SecurityClearance.values.length));
     });
 
@@ -143,17 +144,25 @@ void main() {
       expect(SecurityClearance.values[2], equals(SecurityClearance.admin));
       expect(SecurityClearance.values[3], equals(SecurityClearance.superAdmin));
     });
+
+    test('toJson and fromJson serialize and deserialize integers', () {
+      final jsonVal = SecurityClearance.admin.toJson();
+      expect(jsonVal, equals(SecurityClearance.admin.rawValue));
+      expect(
+          SecurityClearance.fromJson(jsonVal), equals(SecurityClearance.admin));
+      expect(SecurityClearance.fromJson(0x99999999), isNull);
+    });
   });
 
   group('SubscriptionStatus extension type (seeded)', () {
     test('equality holds', () {
       expect(SubscriptionStatus.active, equals(SubscriptionStatus.active));
-      expect(SubscriptionStatus.trial, isNot(equals(SubscriptionStatus.expired)));
+      expect(
+          SubscriptionStatus.trial, isNot(equals(SubscriptionStatus.expired)));
     });
 
     test('raw values are non-sequential', () {
-      final values =
-          SubscriptionStatus.values.map((v) => v.rawValue).toList();
+      final values = SubscriptionStatus.values.map((v) => v.rawValue).toList();
       final sequential = List.generate(values.length, (i) => i);
       expect(values, isNot(equals(sequential)));
     });
@@ -220,7 +229,9 @@ void main() {
       expect(SubscriptionStatus.tryFromRawValue(0x99999999), isNull);
     });
 
-    test('isValid returns true for valid constants and false for invalid rawValue', () {
+    test(
+        'isValid returns true for valid constants and false for invalid rawValue',
+        () {
       for (final v in SubscriptionStatus.values) {
         expect(v.isValid, isTrue);
       }
@@ -231,7 +242,8 @@ void main() {
     test('toJson and fromJson operate safely on raw integers', () {
       final jsonVal = SubscriptionStatus.active.toJson();
       expect(jsonVal, equals(SubscriptionStatus.active.rawValue));
-      expect(SubscriptionStatus.fromJson(jsonVal), equals(SubscriptionStatus.active));
+      expect(SubscriptionStatus.fromJson(jsonVal),
+          equals(SubscriptionStatus.active));
       expect(SubscriptionStatus.fromJson(0x99999999), isNull);
     });
   });
@@ -268,6 +280,42 @@ void main() {
         system: () => 'system_mode',
       );
       expect(label, equals('dark_mode'));
+
+      final invalid = AppTheme.fromRawValue(0x99999999);
+      expect(
+        () => invalid.when(
+          light: () => 'l',
+          dark: () => 'd',
+          system: () => 's',
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('fromRawValue, isValid, and values work correctly', () {
+      expect(AppTheme.fromRawValue(AppTheme.light.rawValue),
+          equals(AppTheme.light));
+      expect(AppTheme.light.isValid, isTrue);
+      expect(AppTheme.fromRawValue(0x99999999).isValid, isFalse);
+      expect(AppTheme.values,
+          equals([AppTheme.light, AppTheme.dark, AppTheme.system]));
+    });
+
+    test('.maybeWhen() branch matching and fallback', () {
+      expect(
+        AppTheme.light.maybeWhen(
+          light: () => 'light_hit',
+          orElse: () => 'other',
+        ),
+        equals('light_hit'),
+      );
+      expect(
+        AppTheme.dark.maybeWhen(
+          light: () => 'light_hit',
+          orElse: () => 'other',
+        ),
+        equals('other'),
+      );
     });
   });
 
@@ -279,25 +327,70 @@ void main() {
     });
 
     test('tryFromRawValue parses explicit values correctly', () {
-      expect(PaymentGateway.tryFromRawValue(0x10000001), equals(PaymentGateway.stripe));
-      expect(PaymentGateway.tryFromRawValue(0x20000002), equals(PaymentGateway.applePay));
-      expect(PaymentGateway.tryFromRawValue(0x30000003), equals(PaymentGateway.googlePay));
+      expect(PaymentGateway.tryFromRawValue(0x10000001),
+          equals(PaymentGateway.stripe));
+      expect(PaymentGateway.tryFromRawValue(0x20000002),
+          equals(PaymentGateway.applePay));
+      expect(PaymentGateway.tryFromRawValue(0x30000003),
+          equals(PaymentGateway.googlePay));
       expect(PaymentGateway.tryFromRawValue(0x40000004), isNull);
+    });
+
+    test('fromRawValue, isValid, and values work correctly', () {
+      expect(PaymentGateway.fromRawValue(PaymentGateway.stripe.rawValue),
+          equals(PaymentGateway.stripe));
+      expect(PaymentGateway.stripe.isValid, isTrue);
+      expect(PaymentGateway.fromRawValue(0x99999999).isValid, isFalse);
+      expect(
+          PaymentGateway.values,
+          equals([
+            PaymentGateway.stripe,
+            PaymentGateway.applePay,
+            PaymentGateway.googlePay
+          ]));
     });
 
     test('toJson and fromJson work with explicit values', () {
       expect(PaymentGateway.applePay.toJson(), equals(0x20000002));
-      expect(PaymentGateway.fromJson(0x20000002), equals(PaymentGateway.applePay));
+      expect(
+          PaymentGateway.fromJson(0x20000002), equals(PaymentGateway.applePay));
       expect(PaymentGateway.fromJson(0x99999999), isNull);
     });
 
-    test('.when() matches explicit hex cases', () {
+    test('.when() matches explicit hex cases and fails closed', () {
       final gatewayName = PaymentGateway.stripe.when(
         stripe: () => 'Stripe Checkout',
         applePay: () => 'Apple Pay Sheet',
         googlePay: () => 'Google Pay Sheet',
       );
       expect(gatewayName, equals('Stripe Checkout'));
+
+      final invalid = PaymentGateway.fromRawValue(0x99999999);
+      expect(
+        () => invalid.when(
+          stripe: () => 's',
+          applePay: () => 'a',
+          googlePay: () => 'g',
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
+    test('.maybeWhen() branch matching and fallback', () {
+      expect(
+        PaymentGateway.stripe.maybeWhen(
+          stripe: () => 'stripe_hit',
+          orElse: () => 'other',
+        ),
+        equals('stripe_hit'),
+      );
+      expect(
+        PaymentGateway.applePay.maybeWhen(
+          stripe: () => 'stripe_hit',
+          orElse: () => 'other',
+        ),
+        equals('other'),
+      );
     });
   });
 }

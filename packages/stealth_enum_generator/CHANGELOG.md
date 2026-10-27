@@ -1,3 +1,12 @@
+## 2.2.3
+
+### Maintenance & Compatibility
+* Requires `stealth_enum: ">=2.2.3 <3.0.0"` with tightened lower bounds on `meta` (`>=1.14.0`).
+* Added tests for empty enum validation and seed parameter generation, boosting test suite to 23 comprehensive tests.
+* Formatted source code to standard Dart formatting conventions.
+* Fixed dartdoc symbol references for `StealthEnum.key` and `StealthEnum.seed`.
+* Zero hash churn: 100% byte-for-byte backwards compatible with 2.2.0, 2.2.1, and 2.2.2.
+
 ## 2.2.2
 
 ### Hardening & Key Management

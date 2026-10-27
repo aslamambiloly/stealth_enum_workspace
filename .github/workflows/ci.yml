@@ -57,14 +57,23 @@ jobs:
 
       - name: Run tests with coverage
         run: |
-          cd example
+          cd packages/stealth_enum
           dart pub get
           dart pub global run coverage:test_with_coverage
-        # This generates example/coverage/lcov.info automatically with 100% coverage
+          cd ../stealth_enum_generator
+          dart pub get
+          dart pub global run coverage:test_with_coverage
+          cd ../../example
+          dart pub get
+          dart pub global run coverage:test_with_coverage
 
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v5
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          files: example/coverage/lcov.info
+          files: |
+            packages/stealth_enum/coverage/lcov.info
+            packages/stealth_enum_generator/coverage/lcov.info
+            example/coverage/lcov.info
           fail_ci_if_error: false
+

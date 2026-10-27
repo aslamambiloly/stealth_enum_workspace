@@ -10,7 +10,7 @@ import 'package:stealth_enum/stealth_enum.dart';
 ///
 /// ### Security design decisions
 /// * Values are derived using **HMAC-SHA256** keyed with an optional user-supplied
-///   secret [key], [seed], or default salt over `'$publicName::$fieldName'`.
+///   secret [StealthEnum.key], [StealthEnum.seed], or default salt over `'$publicName::$fieldName'`.
 ///   Because HMAC-SHA256 satisfies the strict avalanche criterion and is a
 ///   cryptographically secure pseudorandom function (PRF), XOR differential
 ///   attacks (such as XORing pairs of constants) cannot cancel out the key or
@@ -136,7 +136,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
           'Enum constant "$fieldName" in enum "$publicName" collides with a generated extension type member or parameter.\n'
           'Reserved names: ${_reservedNames.join(', ')}.',
           element: field,
-          todo: 'Rename the constant "$fieldName" to avoid collision with generated members.',
+          todo:
+              'Rename the constant "$fieldName" to avoid collision with generated members.',
         );
       }
     }
@@ -265,7 +266,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
             '@StealthValue($explicitValue) on constant "$fieldName" in enum "$publicName" is invalid. '
             'Values must be positive 32-bit unsigned integers between 0x0 and 0xFFFFFFFF.',
             element: field,
-            todo: 'Specify a positive 32-bit integer, e.g. @StealthValue(0x10000001).',
+            todo:
+                'Specify a positive 32-bit integer, e.g. @StealthValue(0x10000001).',
           );
         }
         if (explicitValue < 0x1000) {
@@ -274,7 +276,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
             'Values below 0x1000 defeat reverse-engineering resistance by creating low sequential jump tables. '
             'Use high-entropy constants (>= 0x10000).',
             element: field,
-            todo: 'Choose a high-entropy hex constant, e.g. @StealthValue(0x10000001).',
+            todo:
+                'Choose a high-entropy hex constant, e.g. @StealthValue(0x10000001).',
           );
         }
         if (usedValues.contains(explicitValue)) {
@@ -442,7 +445,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
         '  /// Looks up a [$publicName] by its [label] string (equivalent to `values.byName`).');
     buf.writeln('  ///');
     buf.writeln('  /// Returns `null` if no variant matches the given label.');
-    buf.writeln('  static $publicName? byLabel(String label) => switch (label) {');
+    buf.writeln(
+        '  static $publicName? byLabel(String label) => switch (label) {');
     for (final name in fieldNames) {
       buf.writeln("        '$name' => $name,");
     }
@@ -482,7 +486,8 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
 
     // ── maybeWhen() ───────────────────────────────────────────────────────────
     buf.writeln();
-    buf.writeln('  /// Partial pattern matching with a required [orElse] fallback.');
+    buf.writeln(
+        '  /// Partial pattern matching with a required [orElse] fallback.');
     buf.writeln('  ///');
     buf.writeln('  /// Marked with `@pragma(\'vm:prefer-inline\')` to inline');
     buf.writeln(

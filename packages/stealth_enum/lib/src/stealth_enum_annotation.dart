@@ -71,7 +71,7 @@ final class StealthEnum {
   /// identifiers. Only enable this when you genuinely need display names or
   /// logging and you understand the trade-off.
   ///
-  /// Note: [toJson] and [fromJson] are always generated on all extension types
+  /// Note: `toJson` and `fromJson` are always generated on all extension types
   /// because they operate exclusively on raw integers with zero string overhead.
   ///
   /// When enabled, the generated type gains:
@@ -94,7 +94,7 @@ final class StealthEnum {
   });
 }
 
-/// Optional annotation on an enum constant to explicitly specify its [rawValue].
+/// Optional annotation on an enum constant to explicitly specify its raw integer value.
 ///
 /// Use this when you require an immutable, exact integer value across renames,
 /// or to match existing database records / backend protocol values.
@@ -121,7 +121,7 @@ final class StealthEnum {
 @Target({TargetKind.enumValue})
 final class StealthValue {
   /// The explicit raw integer value to assign to this enum constant.
-  /// Must be an unsigned 32-bit integer in the range [0x0 .. 0xFFFFFFFF].
+  /// Must be an unsigned 32-bit integer in the range `0x0 .. 0xFFFFFFFF`.
   final int value;
 
   /// Creates a [StealthValue] annotation with an explicit [value].
