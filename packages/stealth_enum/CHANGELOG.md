@@ -1,3 +1,8 @@
+## 2.0.1
+
+* Updated package-level `llms.txt` with complete 2.0.x feature documentation, migration guide, JSON serialization patterns, and safe parsing guarantees.
+* Synchronized documentation and examples across the package.
+
 ## 2.0.0
 
 ### New Features

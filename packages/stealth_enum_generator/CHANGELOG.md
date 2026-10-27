@@ -1,3 +1,8 @@
+## 2.0.1
+
+* Updated `README.md`, example code, and package-level `llms.txt` to accurately reference `stealth_enum: ^2.0.0` and `stealth_enum_generator: ^2.0.0`.
+* Synchronized documentation and examples across the package.
+
 ## 2.0.0
 
 * Added `generateLabel` code path in `StealthEnumGenerator`. When `@StealthEnum(generateLabel: true)`, the generator emits `.label` getter, `byLabel(String)`, `toJson()`, and `fromJson(int)` helpers alongside the existing int-backed extension type.

@@ -10,7 +10,7 @@ In Flutter, standard enums retain their plain-text names (`.name` and `.toString
 
 - **Dart SDK:** `>=3.3.0 <4.0.0`
 - **Flutter:** `>=3.19.0`
-- **Current stable version:** `2.0.0`
+- **Current stable version:** `2.0.1`
 - **Packages on pub.dev:**
   - `stealth_enum`: https://pub.dev/packages/stealth_enum (Annotations)
   - `stealth_enum_generator`: https://pub.dev/packages/stealth_enum_generator (Builder)
