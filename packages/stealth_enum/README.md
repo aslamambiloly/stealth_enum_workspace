@@ -129,12 +129,12 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
 
 | Feature | Standard Dart `enum` | `@StealthEnum` |
 |:---:|:---:|:---:|
-| **Strings in Binary** | Plain-text in Object Pool (`pp.txt`) | **Zero** strings (completely absent) |
+| **Strings in Binary** | Plain-text in Object Pool (`pp.txt`) | **Zero** strings in binary (with `generateLabel: false`) |
 | **Index Pattern** | Sequential `0, 1, 2, 3` (jump tables) | Non-sequential 32-bit hex (`0x4B91E20A`) |
 | **Runtime Cost** | Wrapper object allocation | **Zero** (erases to raw primitive `int`) |
 | **Exhaustive Matching** | Native `switch` statement | Inlined `.when()` / `.maybeWhen()` |
 | **Safe Parsing** | `.values.byName()` throws on unknown | `tryFromRawValue()` returns null |
-| **Decompiler Visibility** | Anchors for REA & Ghidra | Indistinguishable from random constants |
+| **Decompiler Visibility** | Anchors for REA & Ghidra | Indistinguishable from random constants (with secret key; default salt dictionary-recoverable) |
 | **Tree-Shaking** | Kept in binary | **100% tree-shaken** (private source enum) |
 
 </div>
@@ -146,11 +146,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.2
+  stealth_enum: ^2.2.4
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.2
+  stealth_enum_generator: ^2.2.4
 ```
 
 Then run:
@@ -236,18 +236,23 @@ void main() {
 }
 ```
 
-### Custom seed for deterministic builds
+### Secret key for cryptographic secrecy
 
-By default, `stealth_enum` computes deterministic values based on symbol names and internal hashing. If you want a fixed seed across all environments or custom entropy:
+For cryptographic resistance against dictionary recovery, supply a secret key (minimum 24 characters recommended):
 
 ```dart
-@StealthEnum(seed: 0xCAFEBABE)
+@StealthEnum(key: 'your-project-secret-salt-here-or-env')
 enum _SubscriptionTier {
   free,
   pro,
   enterprise,
 }
 ```
+
+> [!TIP]
+> **Preferred Key Configuration:** In production, configure the secret key project-wide in `build.yaml` or via the `STEALTH_ENUM_KEY` CI environment variable so keys are not hardcoded in source files.
+>
+> *(Note: A legacy `seed: int` parameter is also supported as a 32-bit namespace separator, but provides low entropy. Use `key:` for cryptographic protection).*
 
 ### Custom type name
 
@@ -588,14 +593,14 @@ dart run build_runner build --delete-conflicting-outputs
 
 ##### Key Fingerprint Verification
 
-When a secret key is configured, `stealth_enum_generator` includes an 8-character SHA-256 fingerprint comment in each generated file:
+When a secret key is configured, `stealth_enum_generator` includes an 8-character domain-separated HMAC-SHA256 fingerprint comment in each generated file:
 
 ```dart
 // Key fingerprint: a4f8e219
 extension type const SecretStatus._(int rawValue) {
 ```
 
-This fingerprint allows CI checks and reviewers to verify that files were generated with the expected secret key without exposing the key itself.
+This fingerprint (`HMAC-SHA256(key, 'stealth_enum:fingerprint:v1')`) allows CI checks and reviewers to verify that files were generated with the expected secret key without exposing the key itself. To prevent offline dictionary matching against short passwords, the generator issues a compile-time warning if a key is under 24 characters. (Enums whose constants are all frozen with `@StealthValue` omit the fingerprint).
 
 #### Core Architectural Guarantees
 

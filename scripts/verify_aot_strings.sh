@@ -222,23 +222,34 @@ if [[ "${1:-}" == "--flutter" ]]; then
       exit 1
     fi
 
-    # Optional control APK verification if pre-migration APK is supplied
+    # Control APK verification is strictly required in Flutter mode
     CONTROL_APK="${CONTROL_APK:-}"
-    if [[ -n "$CONTROL_APK" && -f "$CONTROL_APK" ]]; then
-      echo -e "${CYAN}[INFO]${RESET} Scanning CONTROL APK to verify baseline string leakage ($CONTROL_APK)..."
-      unzip -p "$CONTROL_APK" lib/arm64-v8a/libapp.so > "$BUILD_DIR/control_libapp.so"
-      CONTROL_LEAKS=0
-      for s in "${SCAN_STRINGS[@]}"; do
-        if scan_binary_for_string "$BUILD_DIR/control_libapp.so" "$s"; then
-          echo -e "  ${YELLOW}[CONFIRMED LEAK]${RESET} String '${BOLD}$s${RESET}' FOUND in control APK"
-          CONTROL_LEAKS=$((CONTROL_LEAKS + 1))
-        fi
-      done
-      if [ "$CONTROL_LEAKS" -eq 0 ]; then
-        echo -e "  ${YELLOW}[WARN]${RESET} None of the target scan strings were found in the control APK."
-      else
-        echo -e "  ${GREEN}✓ Confirmed: Control APK leaks target strings.${RESET}"
+    if [[ -z "$CONTROL_APK" || ! -f "$CONTROL_APK" ]]; then
+      echo -e "${RED}[ERROR] CONTROL_APK not provided or file not found: '$CONTROL_APK'${RESET}"
+      echo -e "In Flutter mode, a control APK (built with standard Dart enums) is REQUIRED to establish baseline string leakage."
+      echo -e "Without a control APK, absence of strings proves nothing (strings may never have been compiled in)."
+      echo -e "Usage:"
+      echo -e "  CONTROL_APK=/path/to/control.apk ./scripts/verify_aot_strings.sh --flutter /path/to/project \"str1,str2\""
+      echo -e "${BOLD}${RED}UNVERIFIED: Control APK missing or invalid.${RESET}"
+      exit 1
+    fi
+
+    echo -e "${CYAN}[INFO]${RESET} Scanning CONTROL APK to verify baseline string leakage ($CONTROL_APK)..."
+    unzip -p "$CONTROL_APK" lib/arm64-v8a/libapp.so > "$BUILD_DIR/control_libapp.so"
+    CONTROL_LEAKS=0
+    for s in "${SCAN_STRINGS[@]}"; do
+      if scan_binary_for_string "$BUILD_DIR/control_libapp.so" "$s"; then
+        echo -e "  ${YELLOW}[CONFIRMED LEAK]${RESET} String '${BOLD}$s${RESET}' FOUND in control APK"
+        CONTROL_LEAKS=$((CONTROL_LEAKS + 1))
       fi
+    done
+    if [ "$CONTROL_LEAKS" -eq 0 ]; then
+      echo -e "  ${RED}[ERROR] None of the target scan strings were found in the control APK.${RESET}"
+      echo -e "The control APK did not leak any target strings, so string absence in the stealth APK cannot be verified."
+      echo -e "${BOLD}${RED}UNVERIFIED: Control APK did not leak target strings.${RESET}"
+      exit 1
+    else
+      echo -e "  ${GREEN}✓ Confirmed: Control APK leaks $CONTROL_LEAKS target string(s). Baseline established.${RESET}"
     fi
 
     echo -e "${CYAN}[INFO]${RESET} Compiling release arm64 APK with obfuscation for project: $FLUTTER_PROJ"

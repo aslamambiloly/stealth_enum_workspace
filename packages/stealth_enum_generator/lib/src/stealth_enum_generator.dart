@@ -99,24 +99,6 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
             ? rawKeyOverride.trim()
             : null;
 
-    if (requireKey && keyOverride == null) {
-      throw InvalidGenerationSourceError(
-        'Enum "$publicName" requires a secret key for cryptographic security, but none was provided.\n'
-        'Provide a key via @StealthEnum(key: "secret"), build.yaml (options: {key: "secret"}), '
-        'or the STEALTH_ENUM_KEY environment variable.',
-        element: element,
-        todo: 'Provide a high-entropy secret key or remove require_key.',
-      );
-    }
-
-    if (keyOverride == null && seedOverride == null) {
-      log.warning(
-        'stealth_enum: Enum "$publicName" is using the public default salt. '
-        'For cryptographic security against dictionary recovery, provide a secret key '
-        'via @StealthEnum(key: "..."), build.yaml, or STEALTH_ENUM_KEY.',
-      );
-    }
-
     // ── Extract enum constants ────────────────────────────────────────────────
     final List<FieldElement> constants =
         enumEl.fields.where((f) => f.isEnumConstant).toList();
@@ -126,6 +108,42 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
         '@StealthEnum enum must have at least one constant.',
         element: element,
       );
+    }
+
+    final bool allExplicit =
+        constants.every((f) => _readExplicitValue(f) != null);
+
+    if (!allExplicit) {
+      if (requireKey && keyOverride == null) {
+        throw InvalidGenerationSourceError(
+          'Enum "$publicName" requires a secret key for cryptographic security, but none was provided.\n'
+          'Provide a key via @StealthEnum(key: "secret"), build.yaml (options: {key: "secret"}), '
+          'or the STEALTH_ENUM_KEY environment variable.',
+          element: element,
+          todo: 'Provide a high-entropy secret key or remove require_key.',
+        );
+      }
+
+      if (keyOverride != null) {
+        if (keyOverride.length < 24) {
+          log.warning(
+            'stealth_enum: key for "$publicName" is under 24 chars; '
+            'use python3 -c "import secrets;print(secrets.token_urlsafe(24))"',
+          );
+        }
+      } else if (seedOverride != null) {
+        log.warning(
+          'stealth_enum: Enum "$publicName" is using a 32-bit integer seed. '
+          'Seeds have low entropy (~1.7h search space); for cryptographic secrecy against dictionary recovery, '
+          'provide a secret key via @StealthEnum(key: "..."), build.yaml, or STEALTH_ENUM_KEY.',
+        );
+      } else {
+        log.warning(
+          'stealth_enum: Enum "$publicName" is using the public default salt. '
+          'For cryptographic security against dictionary recovery, provide a secret key '
+          'via @StealthEnum(key: "..."), build.yaml, or STEALTH_ENUM_KEY.',
+        );
+      }
     }
 
     // Validate that constant names do not collide with generated member names
@@ -162,6 +180,7 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
       generateWhen,
       generateLabel,
       keyOverride,
+      !allExplicit,
     );
     return buffer.toString();
   }
@@ -337,10 +356,13 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     bool generateWhen,
     bool generateLabel, [
     String? keyOverride,
+    bool emitFingerprint = true,
   ]) {
-    if (keyOverride != null && keyOverride.isNotEmpty) {
-      final fp =
-          sha256.convert(utf8.encode(keyOverride)).toString().substring(0, 8);
+    if (emitFingerprint && keyOverride != null && keyOverride.isNotEmpty) {
+      final fp = Hmac(sha256, utf8.encode(keyOverride))
+          .convert(utf8.encode('stealth_enum:fingerprint:v1'))
+          .toString()
+          .substring(0, 8);
       buf.writeln('// Key fingerprint: $fp');
     }
     buf.writeln('extension type const $publicName._(int rawValue) {');

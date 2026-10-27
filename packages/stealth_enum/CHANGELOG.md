@@ -1,3 +1,9 @@
+## 2.2.4
+
+### Security & Hardening
+* **Documentation refinement**: Clarified feature table conditions and updated security recommendations to emphasize secret `key:` (min 24 chars) over low-entropy 32-bit `seed:`.
+* **Zero hash churn**: 100% byte-for-byte backwards compatible with 2.2.0, 2.2.1, 2.2.2, and 2.2.3.
+
 ## 2.2.3
 
 ### Fixes & Compatibility

@@ -10,7 +10,7 @@ In Flutter, standard enums retain their plain-text names (`.name` and `.toString
 
 - **Dart SDK:** `>=3.3.0 <4.0.0`
 - **Flutter:** `>=3.19.0`
-- **Current stable version:** `2.2.3`
+- **Current stable version:** `2.2.4`
 - **Packages on pub.dev:**
   - `stealth_enum`: https://pub.dev/packages/stealth_enum (Annotations)
   - `stealth_enum_generator`: https://pub.dev/packages/stealth_enum_generator (Builder)
@@ -33,11 +33,11 @@ Add to `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.3
+  stealth_enum: ^2.2.4
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.3
+  stealth_enum_generator: ^2.2.4
 ```
 
 Run:
@@ -204,7 +204,7 @@ class UserRoleConverter implements JsonConverter<UserRole, int> {
 
 ## Migration & Version Compatibility
 
-- **2.2.0 -> 2.2.3**: The HMAC-SHA256 derivation formula is 100% byte-for-byte identical. Upgrading causes **zero hash churn** for existing constants.
+- **2.2.0 -> 2.2.4**: The HMAC-SHA256 derivation formula is 100% byte-for-byte identical. Upgrading causes **zero hash churn** for existing constants.
 - **Migration from 2.0.x / 2.1.0**: Version 2.2.0 upgraded from linear FNV-1a to keyed HMAC-SHA256. If your application persisted raw integer values from 2.0.x / 2.1.0 into databases or storage, annotate those constants with their existing hex values using `@StealthValue(0x...)` before regenerating.
 - **Key Rotation**: Changing keys changes all un-annotated derived integers. Freeze persisted values with `@StealthValue` before changing keys, and run `dart run build_runner clean` so build_runner regenerates all files.
 

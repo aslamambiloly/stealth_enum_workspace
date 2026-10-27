@@ -1,3 +1,13 @@
+## 2.2.4
+
+### Security & Hardening
+* **Short Key Warning**: Added compile-time warning when a secret key is under 24 characters, recommending `python3 -c "import secrets;print(secrets.token_urlsafe(24))"` to prevent weak keys vulnerable to offline dictionary confirmation.
+* **Domain-Separated Key Fingerprinting**: Key fingerprints are now derived with domain separation (`HMAC-SHA256(key, 'stealth_enum:fingerprint:v1')`) to prevent cross-protocol table reuse.
+* **Strict Control APK Enforcement**: Updated empirical verification script (`scripts/verify_aot_strings.sh`) in `--flutter` mode to require `CONTROL_APK` with confirmed baseline string leaks, exiting with `UNVERIFIED` otherwise.
+* **Smart Warning Handling for `@StealthValue`**: Enums where every constant has explicit `@StealthValue` now skip default-salt warnings, key fingerprints, and `require_key` checks (as no key is needed).
+* **Seed Warning**: Added compile-time warning for seed-only enums advising that 32-bit seeds have low entropy (~1.7h search space) compared to secret keys.
+* **Zero hash churn**: 100% byte-for-byte backwards compatible with 2.2.0, 2.2.1, 2.2.2, and 2.2.3.
+
 ## 2.2.3
 
 ### Maintenance & Compatibility

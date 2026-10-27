@@ -541,8 +541,10 @@ enum _ReservedVal {
       final expectedInactive = _expectedHex(key, 'SecretStatus', 'inactive');
       final defaultActive = _defaultSaltHex('SecretStatus', 'active');
       final defaultInactive = _defaultSaltHex('SecretStatus', 'inactive');
-      final expectedFp =
-          sha256.convert(utf8.encode(key)).toString().substring(0, 8);
+      final expectedFp = Hmac(sha256, utf8.encode(key))
+          .convert(utf8.encode('stealth_enum:fingerprint:v1'))
+          .toString()
+          .substring(0, 8);
 
       expect(expectedActive, isNot(equals(defaultActive)),
           reason: 'Keyed hash must differ from default salt');
@@ -714,6 +716,104 @@ enum _WarnEnum { active }
       expect(
         logs,
         anyElement(contains('is using the public default salt')),
+      );
+    });
+
+    test('logs warning when key is under 24 characters', () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(const BuilderOptions({'key': 'short_key_123'})),
+        _withSources({
+          'a|lib/short_keyed.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'short_keyed.g.dart';
+
+@StealthEnum()
+enum _ShortKeyed { a }
+''',
+        }),
+        outputs: {
+          'a|lib/short_keyed.stealth_enum.g.part': decodedMatches(
+            contains('static const ShortKeyed a = ShortKeyed._('),
+          ),
+        },
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains('is under 24 chars')),
+      );
+    });
+
+    test(
+        'all explicit @StealthValue constants skip default-salt warning, fingerprint, and require_key check',
+        () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(const BuilderOptions({'require_key': true})),
+        _withSources({
+          'a|lib/frozen.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'frozen.g.dart';
+
+@StealthEnum()
+enum _Frozen {
+  @StealthValue(0x10000001)
+  a,
+  @StealthValue(0x20000002)
+  b,
+}
+''',
+        }),
+        outputs: {
+          'a|lib/frozen.stealth_enum.g.part': decodedMatches(
+            allOf([
+              contains('static const Frozen a = Frozen._(0x10000001);'),
+              contains('static const Frozen b = Frozen._(0x20000002);'),
+              isNot(contains('// Key fingerprint:')),
+            ]),
+          ),
+        },
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        isNot(anyElement(contains('is using the public default salt'))),
+      );
+      expect(
+        logs,
+        isNot(anyElement(
+            contains('requires a secret key for cryptographic security'))),
+      );
+    });
+
+    test('seed-only enum logs warning about low entropy', () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/seeded_warn.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'seeded_warn.g.dart';
+
+@StealthEnum(seed: 42)
+enum _SeededWarn { a }
+''',
+        }),
+        outputs: {
+          'a|lib/seeded_warn.stealth_enum.g.part': decodedMatches(
+            contains('static const SeededWarn a = SeededWarn._('),
+          ),
+        },
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(
+            contains('is using a 32-bit integer seed. Seeds have low entropy')),
       );
     });
   });
