@@ -34,7 +34,8 @@ extension type const SubscriptionStatus._(int rawValue) {
       0x4B91E20A => trial(),
       0x7C104F8B => active(),
       0x1D55A9C3 => expired(),
-      _ => cancelled(),
+      0x6E82B119 => cancelled(),
+      _ => throw StateError(''),
     };
   }
 

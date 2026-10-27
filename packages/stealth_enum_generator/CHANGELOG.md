@@ -1,3 +1,9 @@
+## 1.0.4
+
+* Security hardening: `.when()` now generates explicit hex conditions for every enum constant.
+* Wildcard branch `_ => throw StateError('')` fails closed on unknown or corrupted integers without leaking strings.
+* 100% test coverage maintained.
+
 ## 1.0.3
 
 * Added `fromRawValue` factory constructor to generated extension types for zero-cost runtime deserialization.

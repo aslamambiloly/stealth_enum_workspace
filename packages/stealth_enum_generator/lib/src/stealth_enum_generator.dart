@@ -12,8 +12,9 @@ import 'package:stealth_enum/stealth_enum.dart';
 /// * Values are **deterministic** (seeded from enum + field name hash) so
 ///   repeated `build_runner` runs don't dirty Git diffs, yet look completely
 ///   non-sequential in Ghidra ARM64 assembly.
-/// * The final branch of the generated `switch` is the wildcard `_` mapped to
-///   the last case — no `StateError` string ever enters the Dart Object Pool.
+/// * Every case in `.when()` matches an explicit hex constant. The wildcard `_`
+///   branch fails closed by throwing `StateError('')` without leaking strings,
+///   preventing invalid/tampered values from executing privileged branches.
 /// * `@pragma('vm:prefer-inline')` on `.when` / `.maybeWhen` forces AOT to
 ///   inline the branch at the call site, stripping the helper method itself
 ///   from the binary.
@@ -181,15 +182,13 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     buf.writeln('  }) {');
     buf.writeln('    return switch (rawValue) {');
 
-    // All cases except the last use explicit hex; the final case uses wildcard
-    // to avoid any string literal (no StateError message in the binary).
-    final lastField = fieldNames.last;
-    for (final name in fieldNames.where((n) => n != lastField)) {
+    // All cases match explicit hex values.
+    for (final name in fieldNames) {
       final hex = '0x${valueMap[name]!.toRadixString(16).toUpperCase()}';
       buf.writeln('      $hex => $name(),');
     }
-    // Final case as wildcard — keeps the binary free of string literals.
-    buf.writeln('      _ => $lastField(),');
+    // Fail-closed fallback: never execute any branch on an unknown or corrupted value.
+    buf.writeln("      _ => throw StateError(''),");
 
     buf.writeln('    };');
     buf.writeln('  }');

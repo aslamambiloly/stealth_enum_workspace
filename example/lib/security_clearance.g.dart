@@ -39,7 +39,8 @@ extension type const SecurityClearance._(int rawValue) {
       0x373D1B37 => guest(),
       0x764AE932 => operator(),
       0x7C06254C => admin(),
-      _ => superAdmin(),
+      0x3154C03F => superAdmin(),
+      _ => throw StateError(''),
     };
   }
 

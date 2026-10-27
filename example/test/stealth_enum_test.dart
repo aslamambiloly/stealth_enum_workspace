@@ -90,6 +90,19 @@ void main() {
       expect(called, equals(['operator']));
     });
 
+    test('.when() fails closed on corrupted or invalid rawValue', () {
+      final invalid = SecurityClearance.fromRawValue(0x12345678);
+      expect(
+        () => invalid.when(
+          guest: () => 'g',
+          operator: () => 'o',
+          admin: () => 'a',
+          superAdmin: () => 's',
+        ),
+        throwsA(isA<StateError>()),
+      );
+    });
+
     test('.maybeWhen() — matching branch executes', () {
       final result = SecurityClearance.admin.maybeWhen(
         admin: () => 'admin hit',
@@ -146,6 +159,19 @@ void main() {
           cancelled: () => 3,
         ),
         equals(3),
+      );
+    });
+
+    test('.when() fails closed on corrupted or invalid rawValue', () {
+      final invalid = SubscriptionStatus.fromRawValue(0x99999999);
+      expect(
+        () => invalid.when(
+          trial: () => 0,
+          active: () => 1,
+          expired: () => 2,
+          cancelled: () => 3,
+        ),
+        throwsA(isA<StateError>()),
       );
     });
 

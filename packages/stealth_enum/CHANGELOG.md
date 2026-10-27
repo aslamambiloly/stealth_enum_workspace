@@ -1,3 +1,8 @@
+## 1.0.4
+
+* Hardened generated pattern matching: all cases are now explicit and wildcard branches fail closed.
+* Updated documentation and examples.
+
 ## 1.0.3
 
 * Added unit test suite for `StealthEnum` annotation.

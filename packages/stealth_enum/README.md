@@ -267,6 +267,9 @@ extension type const SecurityClearance._(int rawValue) {
   static const SecurityClearance admin = SecurityClearance._(0x7C06254C);
   static const SecurityClearance superAdmin = SecurityClearance._(0x3154C03F);
 
+  const factory SecurityClearance.fromRawValue(int rawValue) =
+      SecurityClearance._;
+
   static const List<SecurityClearance> values = <SecurityClearance>[
     guest,
     operator,
@@ -285,7 +288,8 @@ extension type const SecurityClearance._(int rawValue) {
       0x373D1B37 => guest(),
       0x764AE932 => operator(),
       0x7C06254C => admin(),
-      _ => superAdmin(), // Wildcard branch prevents leaking StateError strings
+      0x3154C03F => superAdmin(),
+      _ => throw StateError(''), // Fails closed without leaking strings
     };
   }
 
