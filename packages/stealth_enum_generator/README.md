@@ -23,11 +23,11 @@ Add `stealth_enum_generator` to your `dev_dependencies` alongside `build_runner`
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.0.0
+  stealth_enum: ^2.1.0
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.0.0
+  stealth_enum_generator: ^2.1.0
 ```
 
 Then run:
@@ -44,8 +44,8 @@ flutter pub get
 
 1. **Validation**: Inspects `@StealthEnum()` annotations and ensures they are applied to private `EnumElement` declarations.
 2. **Identifier Extraction**: Resolves the public type name (strips the leading `_` or applies the custom `name:` override).
-3. **Entropy & Value Generation**: Computes collision-free, deterministic 32-bit hex values for each constant using a seeded random distribution.
-4. **Extension Type Synthesis**: Emits an `extension type const <Name>._(int rawValue)` with static constants, `values` list, safe `tryFromRawValue()` parsing, `isValid` validation, and inlined pattern matching.
+3. **Entropy & Value Generation**: Computes collision-free, deterministic 32-bit hex values using **FNV-1a 32-bit hashing** keyed by public type name, field name, and optional enum seed. Each constant's hash is completely independent—inserting, removing, or reordering constants does not shift other values. Supports `@StealthValue(int)` for explicit, frozen integer overrides.
+4. **Extension Type Synthesis**: Emits an `extension type const <Name>._(int rawValue)` with static constants, `values` list, safe `tryFromRawValue()` parsing, `isValid` validation, integer-based `toJson()` / `fromJson()`, and inlined pattern matching.
 5. **Fail-Closed Security**: Emits explicit hex cases and fail-closed wildcards (`_ => throw StateError('')`) to guarantee that corrupted or unknown values never execute a privileged branch without leaking strings.
 6. **Shared Pipeline Integration**: Built with `SharedPartBuilder` so it seamlessly shares `.g.dart` files with `json_serializable`, `freezed`, and other generators.
 
@@ -59,3 +59,4 @@ PRs and issues are welcome! Please open an issue first for significant changes.
 ## License
 
 Made with 💛 by [aslamambiloly](https://github.com/aslamambiloly) © 2026
+

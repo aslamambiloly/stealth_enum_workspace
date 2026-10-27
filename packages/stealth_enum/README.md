@@ -146,11 +146,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.0.0
+  stealth_enum: ^2.1.0
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.0.0
+  stealth_enum_generator: ^2.1.0
 ```
 
 Then run:
@@ -299,33 +299,65 @@ if (role.isValid) {
 #### 5. Fail-Closed Security
 If an invalid raw integer reaches `.when()`, it fails closed by throwing `StateError('')` rather than accidentally granting unauthorized privileges to the last branch.
 
-### Serialization & Logging (`generateLabel`)
+### Zero-Overhead JSON Serialization (`toJson` / `fromJson`)
 
-By default, `stealth_enum` emits **zero string literals** — not even the constant names appear in the binary. For use cases where you need serialization, logging, or human-readable output, enable `generateLabel`:
-
-> **Security trade-off**: Enabling `generateLabel: true` emits the constant name strings (e.g. `'admin'`, `'superAdmin'`) into the compiled binary via the generated `.g.dart` file. The private source enum's strings are still fully erased, but the generated labels re-introduce readable identifiers. Only enable this when you genuinely need serialization or logging.
+Every generated extension type automatically includes `toJson()` and `fromJson(int)` helpers:
 
 ```dart
-@StealthEnum(generateLabel: true)
-enum _UserRole {
-  viewer,
-  editor,
-  admin,
+// Serializes directly to raw integer (0 string overhead, completely stealthy):
+final json = {'role': clearance.toJson()}; // → {'role': 0x7C06254C}
+
+// Safely deserializes from raw integer, returning null if unknown:
+final restored = SecurityClearance.fromJson(json['role'] as int); // → SecurityClearance.admin
+```
+
+Because these helpers operate exclusively on integers, they produce **zero string literals** in your compiled binary.
+
+### Explicit Values for Databases & APIs (`@StealthValue`)
+
+If you are persisting enum values in a long-lived database (Hive, SQLite, SharedPreferences) or exchanging them with an external API, use `@StealthValue` to lock exact raw integers:
+
+```dart
+@StealthEnum()
+enum _PaymentGateway {
+  @StealthValue(0x10000001)
+  stripe,
+
+  @StealthValue(0x20000002)
+  applePay,
+
+  @StealthValue(0x30000003)
+  googlePay,
 }
 ```
 
-This generates additional helpers on the extension type:
+- **Rename-proof**: You can rename `applePay` to `applePaySheet` without changing its stored `0x20000002` integer.
+- **Order-proof**: Adding, deleting, or reordering other variants will never alter annotated values.
+
+### Display Labels & Logging (`generateLabel`)
+
+By default, `stealth_enum` emits **zero string literals** into the binary. For debugging, logging, or UI pickers where you need human-readable names, enable `generateLabel`:
+
+> [!WARNING]
+> **Security trade-off**: Enabling `generateLabel: true` emits plain-text label strings (e.g. `'admin'`, `'superAdmin'`) into the generated `.g.dart` file, which **will appear in the compiled binary**. The private source enum is still fully tree-shaken, but the generated labels re-introduce readable identifiers. Only enable this when you genuinely need UI labels or logging and accept this trade-off.
+
+```dart
+@StealthEnum(generateLabel: true)
+enum _AppTheme {
+  light,
+  dark,
+  system,
+}
+```
+
+This generates `.label` and `byLabel()` on the extension type:
 
 ```dart
 // .label — equivalent to .name on a standard enum
-print(UserRole.admin.label);     // → 'admin'
+print(AppTheme.dark.label); // → 'dark'
 
-// byLabel() — equivalent to UserRole.values.byName()
-final role = UserRole.byLabel('editor'); // → UserRole.editor (or null)
-
-// toJson() / fromJson() — for JSON serialization
-final json = {'role': UserRole.admin.toJson()}; // → {'role': 2128183628}
-final restored = UserRole.fromJson(json['role'] as int);  // → UserRole.admin
+// byLabel() — equivalent to AppTheme.values.byName() (returns null if not found)
+final theme = AppTheme.byLabel('dark'); // → AppTheme.dark (or null)
 ```
 
 ---
@@ -491,28 +523,38 @@ log('User role changed to ${_roleNames[role]}');
 
 ---
 
-### Persistence & version safety
+### Persistence & Stability Model
 
-> ⚠️ **Important**: The raw integer values are derived from your enum name + constant names + optional seed. If you rename the **generated type** or constants, the values change on the next `build_runner` run. Stored values in databases or shared preferences will become unreadable.
+`stealth_enum` uses a 32-bit FNV-1a hash function to derive constant values:
+`hash = _fnv1a32(publicName) ^ _fnv1a32(fieldName) ^ (seed ?? 0xDEADBEEF)`
 
-**To keep values stable across renames**:
-1. Always use an explicit `seed`:
+This model provides specific guarantees:
+
+1. **Per-Constant Independence**:
+   Because each constant's value is derived independently, **adding, removing, or reordering other constants does NOT shift existing constants**.
+   If you have `_UserRole { viewer, editor, admin }` and later insert `moderator` between `editor` and `admin`, the raw values for `viewer`, `editor`, and `admin` remain completely identical.
+
+2. **Cross-Enum Isolation**:
+   Even if you assign the same `seed` to two different enums, they will never share values because each enum's `publicName` is folded into every constant's seed.
+
+3. **Renaming Behavior**:
+   If you rename a constant (e.g. `editor` → `contentEditor`), its hash changes.
+
+4. **Guaranteed Immutability with `@StealthValue`**:
+   For database persistence, API protocols, or to make values rename-proof forever, use the `@StealthValue` annotation:
+
    ```dart
-   @StealthEnum(seed: 0xCAFEBABE)   // fixes all values forever
-   enum _UserRole { viewer, editor, admin }
-   ```
-2. Or capture the current hex values and add a migration:
-   ```dart
-   // Migration: old 'editor' value was 0x3A12C04F, new is 0x5B87D12A
-   static UserRole migrateFromV1(int storedValue) {
-     if (storedValue == 0x3A12C04F) return UserRole.editor; // old value
-     return UserRole.tryFromRawValue(storedValue) ?? UserRole.viewer;
+   @StealthEnum()
+   enum _UserRole {
+     @StealthValue(0x10000001)
+     viewer,
+
+     @StealthValue(0x10000002)
+     editor,
+
+     @StealthValue(0x10000003)
+     admin,
    }
-   ```
-3. Store a schema version alongside the value:
-   ```dart
-   prefs.setInt('role', role.rawValue);
-   prefs.setInt('role_schema_version', 2); // bump on seed change
    ```
 
 ---
@@ -628,52 +670,64 @@ With `generateLabel: true`, the following helpers are also generated:
   static SecurityClearance? fromJson(int json) => tryFromRawValue(json);
 ```
 
-## AOT Verification
+## Empirical AOT Verification Benchmark
 
-The workspace ships a verification script that **proves empirically** that none of the enum identifier strings appear in the compiled AOT binary:
+The workspace includes a side-by-side empirical verification script comparing standard Dart enums against `@StealthEnum` in native AOT compilation:
 
 ```bash
 cd /path/to/stealth_enum_workspace
 bash scripts/verify_aot_strings.sh
 ```
 
-**What it does:**
-1. Regenerates `.g.dart` files via `build_runner`
-2. Compiles the example app to a native AOT binary with `dart compile exe`
-3. Runs `strings` on the resulting binary
-4. Asserts that `"guest"`, `"operator"`, `"admin"`, `"superAdmin"`, `"_SecurityClearance"`, etc. are **absent**
-5. Prints a clear `[PASS]` / `[FAIL]` per string
+**How it proves string erasure:**
+1. **Control Phase**: Compiles a standard Dart enum to AOT binary and scans it. Asserts that identifiers (`superAdmin`, `StandardClearance`) **ARE LEAKED** into the compiled binary.
+2. **Stealth Phase**: Compiles the `@StealthEnum` extension type with observable runtime side-effects. Scans the binary and asserts that all enum identifiers are **100% ABSENT**.
 
-**Requirements**: Dart SDK >= 3.3.0 and the `strings` CLI (built-in on macOS/Linux, `sudo apt install binutils` on Ubuntu).
-
-Example output:
+Actual benchmark terminal output:
 ```
-╔══════════════════════════════════════════════════════════╗
-║       stealth_enum  AOT String Removal Verifier          ║
-╚══════════════════════════════════════════════════════════╝
+╔══════════════════════════════════════════════════════════════╗
+║    stealth_enum — Empirical AOT String Removal Benchmark     ║
+║       Side-by-Side Control (Standard Enum) vs @StealthEnum   ║
+╚══════════════════════════════════════════════════════════════╝
 
-[STEP 1/3] Regenerating .g.dart files via build_runner...
-[OK]     Code generation complete.
+[INFO]  Dart SDK     : 3.13.3
+[INFO]  Workspace    : /path/to/stealth_enum_workspace
+[INFO]  Build cache  : /path/to/stealth_enum_workspace/.aot_verify_build
 
-[STEP 2/3] Compiling AOT binary with --obfuscate...
-[OK]     Binary compiled: .aot_verify_build/stealth_enum_verify
-          Size: 5.1M
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[PHASE 1/2] CONTROL TARGET: Compiling Standard Dart Enum to AOT...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[OK] Control binary compiled: 5.5M
 
-[STEP 3/3] Scanning binary for sensitive enum strings...
+Scanning control binary for standard enum strings...
+  [CONFIRMED LEAK] Standard enum identifier 'superAdmin' FOUND in AOT binary
+  [CONFIRMED LEAK] Standard enum identifier 'StandardClearance' FOUND in AOT binary
+✓ Control verified: Standard Dart enums leak plain-text identifiers into compiled AOT binaries.
 
-  [PASS] String absent from binary: 'guest'
-  [PASS] String absent from binary: 'operator'
-  [PASS] String absent from binary: 'admin'
-  [PASS] String absent from binary: 'superAdmin'
-  [PASS] String absent from binary: '_SecurityClearance'
-  ...
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+[PHASE 2/2] STEALTH TARGET: Compiling @StealthEnum to AOT...    
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+Resolving dependencies & compiling stealth binary...
+[OK] Stealth binary compiled: 5.5M
 
-══════════════════════════════════════════════════════════
-  ✓ ALL 12 CHECKS PASSED
-    None of the enum identifiers appear in the AOT binary.
-    stealth_enum is working correctly.
-══════════════════════════════════════════════════════════
+Scanning stealth binary for private enum identifiers...
+  [PASS] Sensitive string ABSENT from binary: 'superAdmin'
+  [PASS] Sensitive string ABSENT from binary: '_SecurityClearance'
+  [PASS] Sensitive string ABSENT from binary: 'SecurityClearance.superAdmin'
+  [PASS] Sensitive string ABSENT from binary: '_SubscriptionStatus'
+  [PASS] Sensitive string ABSENT from binary: 'SubscriptionStatus.cancelled'
+
+══════════════════════════════════════════════════════════════
+BENCHMARK RESULTS SUMMARY:
+  • Control Target (Standard Enum) : LEAKED identifier strings into AOT binary
+  • Stealth Target (@StealthEnum)  : 0 LEAKS — all 5 identifiers erased
+══════════════════════════════════════════════════════════════
+
+✓ ALL EMPIRICAL AOT TESTS PASSED.
+  @StealthEnum completely eliminates enum identifier metadata from AOT binaries.
 ```
+
+This benchmark also runs automatically in **GitHub Actions CI on every commit and pull request**.
 
 ## API Reference
 
@@ -682,9 +736,15 @@ Example output:
 | Parameter | Type | Default | Description |
 |---|---|---|---|
 | `name` | `String?` | `null` | Custom name for the generated extension type. Defaults to stripping the leading `_` from the enum name. |
-| `seed` | `int?` | `null` | Custom 32-bit integer seed for deterministic value generation across builds. Recommended for long-lived persistent enums. |
-| `generateWhen` | `bool` | `true` | When `true`, generates `.when()` and `.maybeWhen()` pattern matching helpers. |
-| `generateLabel` | `bool` | `false` | When `true`, generates `.label`, `byLabel()`, `toJson()`, and `fromJson()` helpers. **Emits string literals into the binary — read the security trade-off above.** |
+| `seed` | `int?` | `null` | Custom 32-bit integer seed for customizing the deterministic FNV-1a distribution. |
+| `generateWhen` | `bool` | `true` | When `true`, generates `.when()` and `.maybeWhen()` inlined pattern matching helpers. |
+| `generateLabel` | `bool` | `false` | When `true`, generates `.label` and `byLabel()` helpers. **Emits string literals into the binary — read the security trade-off above.** |
+
+### `@StealthValue`
+
+| Parameter | Type | Description |
+|---|---|---|
+| `value` | `int` | Explicit raw integer value assigned to an individual enum constant. Immune to renames and constant reordering. |
 
 ### Generated Extension Type
 
@@ -695,12 +755,12 @@ Example output:
 | `fromRawValue(int)` | `const factory` | Creates an extension type instance from a raw integer value. |
 | `tryFromRawValue(int)` | `static T?` | Safely parses a raw integer, returning `null` if unknown (zero crashes). |
 | `isValid` | `bool` | Returns `true` if this instance holds a recognized enum variant. |
+| `toJson()` | `int` | Serializes to raw integer for JSON/storage (0 string overhead). |
+| `fromJson(int)` | `static T?` | Deserializes from a raw JSON integer (0 string overhead). |
 | `when<T>(...)` | `T Function(...)` | Inlined exhaustive pattern matching covering all variants. Fails closed on unknown values. |
 | `maybeWhen<T>(...)` | `T Function(...)` | Inlined non-exhaustive pattern matching with a required `orElse` fallback. |
 | `label` | `String` | *(generateLabel: true)* Human-readable name of the variant. Equivalent to `.name` on a standard enum. |
 | `byLabel(String)` | `static T?` | *(generateLabel: true)* Looks up a variant by its label string. Returns `null` if not found. |
-| `toJson()` | `int` | *(generateLabel: true)* Serializes to raw integer for JSON/storage. |
-| `fromJson(int)` | `static T?` | *(generateLabel: true)* Deserializes from a raw JSON integer. |
 
 ## Under the Hood
 
@@ -708,7 +768,7 @@ Example output:
 - **Tree-Shaking:** Because the source enum `_SecurityClearance` is private to the file and never instantiated, the Dart AOT compiler completely removes the original enum declaration, its string names, and metadata from the compiled binary.
 - **Decompiler Neutralization:** Conventional decompilers (Blutter, Ghidra) look for string tables and incremental switch jump tables (`0, 1, 2, ...`). With `stealth_enum`, they see isolated integer comparisons (`CMP W0, #0x7C06254C`) scattered across inlined call sites.
 - **Fail-Closed Security (No String Leaks):** All cases in `.when()` match explicit hex values, and the wildcard branch `_ => throw StateError('')` fails closed on unknown or corrupted values without leaking any string literals into the binary.
-- **Deterministic Values:** Values are seeded from `publicName.hashCode ^ fieldName.hashCode ^ 0xDEADBEEF` (or a user-provided seed). This means the same source code always produces the same hex values, keeping `git diff` clean in CI.
+- **Deterministic FNV-1a Hashing:** Values are derived using a 32-bit FNV-1a hash combining `publicName`, `fieldName`, and an optional seed. Each constant is calculated independently, guaranteeing that adding or removing variants never shifts existing constants' values. Exact numbers can also be frozen with `@StealthValue`.
 
 ## Running the example
 

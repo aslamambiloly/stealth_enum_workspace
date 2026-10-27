@@ -2,6 +2,8 @@ import 'package:test/test.dart';
 
 // The extension types are generated as `part of` these files.
 // Importing the parent files gives us access to SecurityClearance and SubscriptionStatus.
+import 'package:stealth_enum_example/app_theme.dart';
+import 'package:stealth_enum_example/payment_gateway.dart';
 import 'package:stealth_enum_example/security_clearance.dart';
 import 'package:stealth_enum_example/subscription_status.dart';
 
@@ -224,6 +226,78 @@ void main() {
       }
       final invalid = SubscriptionStatus.fromRawValue(0x99999999);
       expect(invalid.isValid, isFalse);
+    });
+
+    test('toJson and fromJson operate safely on raw integers', () {
+      final jsonVal = SubscriptionStatus.active.toJson();
+      expect(jsonVal, equals(SubscriptionStatus.active.rawValue));
+      expect(SubscriptionStatus.fromJson(jsonVal), equals(SubscriptionStatus.active));
+      expect(SubscriptionStatus.fromJson(0x99999999), isNull);
+    });
+  });
+
+  group('AppTheme extension type (generateLabel: true)', () {
+    test('.label returns readable string for each variant', () {
+      expect(AppTheme.light.label, equals('light'));
+      expect(AppTheme.dark.label, equals('dark'));
+      expect(AppTheme.system.label, equals('system'));
+      // Unknown rawValue produces fallback label
+      final unknown = AppTheme.fromRawValue(0x12345678);
+      expect(unknown.label, equals('unknown(305419896)'));
+    });
+
+    test('byLabel parses string and returns null on unknown', () {
+      expect(AppTheme.byLabel('light'), equals(AppTheme.light));
+      expect(AppTheme.byLabel('dark'), equals(AppTheme.dark));
+      expect(AppTheme.byLabel('system'), equals(AppTheme.system));
+      expect(AppTheme.byLabel('invalid_theme'), isNull);
+    });
+
+    test('toJson and fromJson operate on integers without strings', () {
+      final jsonInt = AppTheme.dark.toJson();
+      expect(jsonInt, isA<int>());
+      expect(jsonInt, equals(AppTheme.dark.rawValue));
+      expect(AppTheme.fromJson(jsonInt), equals(AppTheme.dark));
+      expect(AppTheme.fromJson(0x99999999), isNull);
+    });
+
+    test('.when() exhaustive matching works with generateLabel', () {
+      final label = AppTheme.dark.when(
+        light: () => 'light_mode',
+        dark: () => 'dark_mode',
+        system: () => 'system_mode',
+      );
+      expect(label, equals('dark_mode'));
+    });
+  });
+
+  group('PaymentGateway extension type (@StealthValue)', () {
+    test('constants have explicit specified values', () {
+      expect(PaymentGateway.stripe.rawValue, equals(0x10000001));
+      expect(PaymentGateway.applePay.rawValue, equals(0x20000002));
+      expect(PaymentGateway.googlePay.rawValue, equals(0x30000003));
+    });
+
+    test('tryFromRawValue parses explicit values correctly', () {
+      expect(PaymentGateway.tryFromRawValue(0x10000001), equals(PaymentGateway.stripe));
+      expect(PaymentGateway.tryFromRawValue(0x20000002), equals(PaymentGateway.applePay));
+      expect(PaymentGateway.tryFromRawValue(0x30000003), equals(PaymentGateway.googlePay));
+      expect(PaymentGateway.tryFromRawValue(0x40000004), isNull);
+    });
+
+    test('toJson and fromJson work with explicit values', () {
+      expect(PaymentGateway.applePay.toJson(), equals(0x20000002));
+      expect(PaymentGateway.fromJson(0x20000002), equals(PaymentGateway.applePay));
+      expect(PaymentGateway.fromJson(0x99999999), isNull);
+    });
+
+    test('.when() matches explicit hex cases', () {
+      final gatewayName = PaymentGateway.stripe.when(
+        stripe: () => 'Stripe Checkout',
+        applePay: () => 'Apple Pay Sheet',
+        googlePay: () => 'Google Pay Sheet',
+      );
+      expect(gatewayName, equals('Stripe Checkout'));
     });
   });
 }

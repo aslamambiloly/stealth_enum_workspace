@@ -1,5 +1,3 @@
-import 'dart:math';
-
 import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
 import 'package:source_gen/source_gen.dart';
@@ -74,7 +72,7 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     final List<String> fieldNames =
         constants.map((f) => f.name ?? f.displayName).toList();
     final Map<String, int> valueMap =
-        _generateValues(publicName, fieldNames, seedOverride);
+        _generateValues(publicName, constants, seedOverride);
 
     // ── Emit code ─────────────────────────────────────────────────────────────
     final buffer = StringBuffer();
@@ -84,39 +82,102 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
   }
 
   // ---------------------------------------------------------------------------
-  // Value generation
+  // Hash & Value generation
   // ---------------------------------------------------------------------------
 
-  /// Generates a deterministic, collision-free 32-bit hex integer for each
-  /// enum constant. Values are in the range [0x10000000, 0x7FFFFFFF] (positive
-  /// 32-bit, high nibble ≥ 1 to avoid trivially small constants).
+  static int? _readExplicitValue(FieldElement field) {
+    final dynamic meta = field.metadata;
+    final Iterable annotations =
+        meta is Iterable ? meta : (meta.annotations as Iterable);
+    for (final dynamic item in annotations) {
+      if (item is ElementAnnotation) {
+        final value = item.computeConstantValue();
+        if (value != null && value.type?.element?.name == 'StealthValue') {
+          return value.getField('value')?.toIntValue();
+        }
+      }
+    }
+    return null;
+  }
+
+  /// Computes a deterministic 32-bit FNV-1a hash of a UTF-16 string.
+  ///
+  /// Unlike `String.hashCode`, FNV-1a is 100% stable across Dart SDK versions,
+  /// VM implementations, 32-bit/64-bit platforms, and Web targets.
+  static int _fnv1a32(String s) {
+    var hash = 0x811c9dc5; // 2166136261 (FNV offset basis)
+    for (var i = 0; i < s.length; i++) {
+      hash ^= s.codeUnitAt(i);
+      hash = (hash * 0x01000193) & 0xFFFFFFFF; // 16777619 (FNV prime)
+    }
+    return hash;
+  }
+
+  /// Normalizes a 32-bit integer into the positive hex range [0x10000000 .. 0x7FFFFFFF].
+  ///
+  /// This avoids negative numbers on 32-bit platforms/Web, ensures a non-zero high nibble,
+  /// and produces clean, human-readable 8-character hex constants (e.g. `0x373D1B37`).
+  static int _toPositive32(int hash) {
+    final positive = hash & 0x7FFFFFFF;
+    if (positive < 0x10000000) {
+      return positive + 0x10000000;
+    }
+    return positive;
+  }
+
+  /// Generates deterministic, collision-free 32-bit hex integers for each
+  /// enum constant.
+  ///
+  /// 1. Constants annotated with `@StealthValue(int)` use their explicit values.
+  /// 2. Other constants derive their value from an FNV-1a hash of their own name,
+  ///    the public enum name, and an optional seed.
+  ///
+  /// Because each constant's value is derived independently, adding, removing,
+  /// or reordering other constants will NOT shift the values of existing constants.
   Map<String, int> _generateValues(
     String publicName,
-    List<String> fieldNames,
+    List<FieldElement> constants,
     int? seedOverride,
   ) {
     final usedValues = <int>{};
+    final explicitValues = <String, int>{};
     final result = <String, int>{};
 
-    for (final fieldName in fieldNames) {
-      // Deterministic seed: combine public type name, field name, and a fixed
-      // salt so even common names like `active` produce unique distributions
-      // across different enum types.
-      final int baseSeed = seedOverride ??
-          (publicName.hashCode ^ fieldName.hashCode ^ 0xDEADBEEF);
-
-      var rng = Random(baseSeed);
-      int value;
-      int attempts = 0;
-      do {
-        // Stay in the range [0x10000000 .. 0x7FFFFFFF] for human-readable hex.
-        value = rng.nextInt(0x6FFFFFFF) + 0x10000000;
-        attempts++;
-        // Re-seed slightly on collision to find a different value deterministically.
-        if (attempts > 1) {
-          rng = Random(baseSeed ^ attempts);
+    // 1. Pass 1: Collect and validate explicit @StealthValue annotations
+    for (final field in constants) {
+      final fieldName = field.name ?? field.displayName;
+      final explicitValue = _readExplicitValue(field);
+      if (explicitValue != null) {
+        if (usedValues.contains(explicitValue)) {
+          throw InvalidGenerationSourceError(
+            'Duplicate @StealthValue(0x${explicitValue.toRadixString(16).toUpperCase()}) '
+            'found on constant "$fieldName" in enum "$publicName". All values must be unique.',
+            element: field,
+          );
         }
-      } while (usedValues.contains(value));
+        usedValues.add(explicitValue);
+        explicitValues[fieldName] = explicitValue;
+        result[fieldName] = explicitValue;
+      }
+    }
+
+    // 2. Pass 2: Derive deterministic FNV-1a hashes for un-annotated constants
+    final baseSalt = seedOverride ?? 0xDEADBEEF;
+    final nameHash = _fnv1a32(publicName);
+
+    for (final field in constants) {
+      final fieldName = field.name ?? field.displayName;
+      if (explicitValues.containsKey(fieldName)) continue;
+
+      final fieldHash = _fnv1a32(fieldName);
+      final fieldSeed = (baseSalt ^ nameHash ^ fieldHash) & 0xFFFFFFFF;
+
+      int value = _toPositive32(fieldSeed);
+      int probe = 0;
+      while (usedValues.contains(value)) {
+        probe++;
+        value = _toPositive32((fieldSeed + (probe * 0x10007)) & 0x7FFFFFFF);
+      }
 
       usedValues.add(value);
       result[fieldName] = value;
@@ -182,6 +243,23 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
         '  /// Whether this instance holds a recognized constant value.');
     buf.writeln(
         '  bool get isValid => $publicName.values.contains(this);');
+    buf.writeln();
+
+    // toJson / fromJson (always emitted — 100% zero string overhead)
+    buf.writeln(
+        '  /// Serializes this [$publicName] to its raw integer value for JSON/storage.');
+    buf.writeln('  ///');
+    buf.writeln(
+        '  /// Operates entirely on raw integers with zero string overhead in compiled binaries.');
+    buf.writeln('  int toJson() => rawValue;');
+    buf.writeln();
+    buf.writeln(
+        '  /// Deserializes a [$publicName] from a raw JSON integer.');
+    buf.writeln('  ///');
+    buf.writeln(
+        '  /// Returns `null` if [rawValue] does not match any recognized variant.');
+    buf.writeln(
+        '  static $publicName? fromJson(int rawValue) => tryFromRawValue(rawValue);');
 
     if (generateLabel) {
       buf.writeln();
@@ -214,7 +292,7 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     buf.writeln(
         '  // generated labels re-introduce readable names. Use only when you need');
     buf.writeln(
-        '  // serialization or logging and you understand the security trade-off.');
+        '  // display labels or logging and you understand the security trade-off.');
     buf.writeln();
 
     // .label getter
@@ -249,25 +327,6 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     buf.writeln('      _ => null,');
     buf.writeln('    };');
     buf.writeln('  }');
-    buf.writeln();
-
-    // toJson / fromJson
-    buf.writeln(
-        '  /// Serializes this [$publicName] to its raw integer value for JSON/storage.');
-    buf.writeln('  ///');
-    buf.writeln(
-        '  /// Always persist [toJson] values alongside a version stamp so you can');
-    buf.writeln('  /// migrate if you ever regenerate with a new seed.');
-    buf.writeln('  int toJson() => rawValue;');
-    buf.writeln();
-    buf.writeln(
-        '  /// Deserializes a [$publicName] from a raw JSON integer.');
-    buf.writeln('  ///');
-    buf.writeln(
-        '  /// Returns `null` if [json] is not a recognized value.');
-    buf.writeln('  /// Alias for [tryFromRawValue].');
-    buf.writeln(
-        '  static $publicName? fromJson(int json) => tryFromRawValue(json);');
   }
 
   void _writeWhen(

@@ -6,3 +6,4 @@
 .pub/
 build/
 coverage/
+.aot_verify_build/

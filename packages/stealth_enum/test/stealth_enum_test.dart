@@ -30,4 +30,11 @@ void main() {
       expect(annotation.generateWhen, isTrue);
     });
   });
+
+  group('StealthValue annotation', () {
+    test('stores explicit integer value', () {
+      const value = StealthValue(0x12345678);
+      expect(value.value, equals(0x12345678));
+    });
+  });
 }

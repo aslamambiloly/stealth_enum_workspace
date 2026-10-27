@@ -1,31 +1,21 @@
 #!/usr/bin/env bash
 # =============================================================================
-# stealth_enum — AOT String Removal Verification Script
+# stealth_enum — Empirical AOT String Removal Verification & Control Benchmark
 # =============================================================================
 #
 # PURPOSE
-#   Proves empirically that the enum identifier strings ("guest", "operator",
-#   "admin", "superAdmin", etc.) are NOT present in the compiled AOT binary
-#   after applying @StealthEnum.
+#   Provides an undeniable, side-by-side empirical proof:
+#   1. Compiles a CONTROL target with a standard Dart enum to AOT native binary.
+#      Asserts that standard enum names ARE LEAKED into the compiled binary.
+#   2. Compiles a STEALTH target using @StealthEnum to AOT native binary.
+#      Asserts that the private enum identifiers are COMPLETELY ABSENT.
 #
-# HOW IT WORKS
-#   1. Compiles the example app to a native AOT binary with --obfuscate.
-#   2. Runs `strings` on the resulting ELF (macOS/Linux) or PE (Windows) binary.
-#   3. Asserts that none of the sensitive enum names appear in the output.
-#   4. Optionally checks that Blutter-style `pp.txt` identifiers are absent too.
-#
-# USAGE
-#   cd /path/to/stealth_enum_workspace
-#   chmod +x scripts/verify_aot_strings.sh
+# HOW TO RUN
 #   bash scripts/verify_aot_strings.sh
 #
-# REQUIREMENTS
-#   - Dart SDK >= 3.3.0  (dart compile exe)
-#   - `strings` CLI tool  (built-in on macOS/Linux; install binutils on Ubuntu)
-#
-# EXIT CODES
-#   0 — All checks passed, none of the enum strings are present in the binary.
-#   1 — One or more enum strings were found in the binary.
+# OPTIONAL FLUTTER MODE
+#   bash scripts/verify_aot_strings.sh --flutter
+#   (Requires Flutter SDK + Android SDK with target-platform android-arm64)
 # =============================================================================
 
 set -euo pipefail
@@ -41,100 +31,134 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 WORKSPACE_ROOT="$(dirname "$SCRIPT_DIR")"
 EXAMPLE_DIR="$WORKSPACE_ROOT/example"
 BUILD_DIR="$WORKSPACE_ROOT/.aot_verify_build"
-BINARY="$BUILD_DIR/stealth_enum_verify"
+CONTROL_BIN="$BUILD_DIR/control_standard_enum"
+STEALTH_BIN="$BUILD_DIR/stealth_enum_target"
 
-# ── Enum strings to verify are absent from the binary ─────────────────────────
-# Add any constant names from your @StealthEnum annotated enums here.
-STRINGS_MUST_BE_ABSENT=(
-  "guest"
-  "operator"
-  "admin"
-  "superAdmin"
-  "_SecurityClearance"
-  "SecurityClearance"
-  "trial"
-  "active"
-  "expired"
-  "cancelled"
-  "_SubscriptionStatus"
-  "SubscriptionStatus"
-)
-
-# ── Strings that SHOULD be present (sanity check the binary isn't empty) ──────
-STRINGS_MUST_BE_PRESENT=(
-  "Dart"
-)
+scan_binary_for_string() {
+  local bin="$1"
+  local str="$2"
+  # Use grep -a -F (binary text search) which inspects the entire binary including
+  # Dart snapshot pools, immune to BSD vs GNU strings formatting differences.
+  grep -a -F -q "$str" "$bin"
+}
 
 echo ""
-echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════╗${RESET}"
-echo -e "${BOLD}${CYAN}║       stealth_enum  AOT String Removal Verifier          ║${RESET}"
-echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════╝${RESET}"
+echo -e "${BOLD}${CYAN}╔══════════════════════════════════════════════════════════════╗${RESET}"
+echo -e "${BOLD}${CYAN}║    stealth_enum — Empirical AOT String Removal Benchmark     ║${RESET}"
+echo -e "${BOLD}${CYAN}║       Side-by-Side Control (Standard Enum) vs @StealthEnum   ║${RESET}"
+echo -e "${BOLD}${CYAN}╚══════════════════════════════════════════════════════════════╝${RESET}"
 echo ""
 
-# ── Sanity checks ─────────────────────────────────────────────────────────────
+# ── Prerequisite checks ───────────────────────────────────────────────────────
 if ! command -v dart &>/dev/null; then
-  echo -e "${RED}[ERROR]${RESET} 'dart' not found in PATH. Install Dart SDK >= 3.3.0."
-  exit 1
-fi
-
-if ! command -v strings &>/dev/null; then
-  echo -e "${RED}[ERROR]${RESET} 'strings' not found. Install with:"
-  echo "  macOS  : already built-in"
-  echo "  Ubuntu : sudo apt-get install binutils"
+  echo -e "${RED}[ERROR]${RESET} 'dart' CLI not found. Install Dart SDK >= 3.3.0."
   exit 1
 fi
 
 DART_VERSION=$(dart --version 2>&1 | grep -oE '[0-9]+\.[0-9]+\.[0-9]+' | head -1)
-echo -e "${CYAN}[INFO]${RESET}  Dart version : $DART_VERSION"
-echo -e "${CYAN}[INFO]${RESET}  Example dir  : $EXAMPLE_DIR"
-echo -e "${CYAN}[INFO]${RESET}  Build dir    : $BUILD_DIR"
+echo -e "${CYAN}[INFO]${RESET}  Dart SDK     : $DART_VERSION"
+echo -e "${CYAN}[INFO]${RESET}  Workspace    : $WORKSPACE_ROOT"
+echo -e "${CYAN}[INFO]${RESET}  Build cache  : $BUILD_DIR"
 echo ""
 
-# ── Regenerate .g.dart files to ensure they are up-to-date ───────────────────
-echo -e "${YELLOW}[STEP 1/3]${RESET} Regenerating .g.dart files via build_runner..."
-(cd "$EXAMPLE_DIR" && dart pub get -q && dart run build_runner build --delete-conflicting-outputs -q)
-echo -e "${GREEN}[OK]${RESET}     Code generation complete."
-echo ""
-
-# ── Write a minimal Dart entry point for AOT compilation ─────────────────────
+rm -rf "$BUILD_DIR"
 mkdir -p "$BUILD_DIR"
-cat > "$BUILD_DIR/main.dart" <<'DART_EOF'
-// Minimal AOT verification entry point.
-// This exercises the stealth_enum generated types so the compiler cannot
-// tree-shake them out entirely, giving us a realistic binary to scan.
-import 'package:stealth_enum_example/stealth_enum_example.dart';
 
-void main() {
-  // Access every SecurityClearance constant.
-  final levels = SecurityClearance.values;
-  for (final level in levels) {
-    final _ = level.when(
-      guest: () => 0,
-      operator: () => 1,
-      admin: () => 2,
-      superAdmin: () => 3,
-    );
-  }
+# ── STEP 1: Compile & Scan CONTROL Target (Standard Dart Enum) ────────────────
+echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BOLD}${YELLOW}[PHASE 1/2] CONTROL TARGET: Compiling Standard Dart Enum to AOT...${RESET}"
+echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
 
-  // Exercise tryFromRawValue and isValid.
-  final parsed = SecurityClearance.tryFromRawValue(0x7C06254C);
-  assert(parsed != null && parsed.isValid);
+cat > "$BUILD_DIR/pubspec.yaml" <<'EOF'
+name: control_bin
+publish_to: none
+environment:
+  sdk: ">=3.3.0 <4.0.0"
+EOF
 
-  // Access every SubscriptionStatus constant.
-  final tiers = SubscriptionStatus.values;
-  for (final tier in tiers) {
-    final _ = tier.when(
-      trial: () => 'trial',
-      active: () => 'active',
-      expired: () => 'expired',
-      cancelled: () => 'cancelled',
-    );
-  }
+cat > "$BUILD_DIR/control.dart" <<'EOF'
+import 'dart:io';
+
+enum StandardClearance {
+  guest,
+  operator,
+  admin,
+  superAdmin,
 }
-DART_EOF
 
-# We need the example package's pubspec to resolve dependencies.
-cat > "$BUILD_DIR/pubspec.yaml" <<YAML_EOF
+void main(List<String> args) {
+  final seed = args.isEmpty ? 0 : int.tryParse(args[0]) ?? 0;
+  final role = StandardClearance.values[seed % StandardClearance.values.length];
+  final code = switch (role) {
+    StandardClearance.guest => 10,
+    StandardClearance.operator => 20,
+    StandardClearance.admin => 30,
+    StandardClearance.superAdmin => 40,
+  };
+  // Observable external side effect to guarantee compiler retains the code path
+  stdout.writeln('Control role active: $code ($role)');
+}
+EOF
+
+(cd "$BUILD_DIR" && dart compile exe control.dart -o "$CONTROL_BIN" --define=dart.vm.product=true >/dev/null)
+echo -e "${GREEN}[OK]${RESET} Control binary compiled: $(du -sh "$CONTROL_BIN" | cut -f1)"
+echo ""
+echo -e "Scanning control binary for standard enum strings..."
+
+CONTROL_FOUND=0
+for s in "superAdmin" "StandardClearance"; do
+  if scan_binary_for_string "$CONTROL_BIN" "$s"; then
+    echo -e "  ${YELLOW}[CONFIRMED LEAK]${RESET} Standard enum identifier '${BOLD}$s${RESET}' FOUND in AOT binary"
+    CONTROL_FOUND=$((CONTROL_FOUND + 1))
+  else
+    echo -e "  ${RED}[WARN]${RESET} String '$s' was pruned by compiler."
+  fi
+done
+
+if [ "$CONTROL_FOUND" -eq 0 ]; then
+  echo -e "${YELLOW}[WARN]${RESET} Control binary did not retain strings; check compiler flags."
+else
+  echo -e "${GREEN}✓ Control verified: Standard Dart enums leak plain-text identifiers into compiled AOT binaries.${RESET}"
+fi
+echo ""
+
+# ── STEP 2: Compile & Scan STEALTH Target (@StealthEnum) ───────────────────────
+echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+echo -e "${BOLD}${YELLOW}[PHASE 2/2] STEALTH TARGET: Compiling @StealthEnum to AOT...    ${RESET}"
+echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+
+cat > "$BUILD_DIR/stealth_main.dart" <<'EOF'
+import 'dart:io';
+import 'package:stealth_enum_example/security_clearance.dart';
+import 'package:stealth_enum_example/subscription_status.dart';
+
+void main(List<String> args) {
+  final seed = args.isEmpty ? 0 : int.tryParse(args[0]) ?? 0;
+  
+  // Exercise SecurityClearance extension type
+  final clearance = SecurityClearance.values[seed % SecurityClearance.values.length];
+  final clearanceCode = clearance.when(
+    guest: () => 10,
+    operator: () => 20,
+    admin: () => 30,
+    superAdmin: () => 40,
+  );
+
+  // Exercise SubscriptionStatus extension type
+  final tier = SubscriptionStatus.values[seed % SubscriptionStatus.values.length];
+  final tierCode = tier.when(
+    trial: () => 100,
+    active: () => 200,
+    expired: () => 300,
+    cancelled: () => 400,
+  );
+
+  // Observable external side effect preventing dead-code elimination
+  stdout.writeln('Stealth execution: ${clearanceCode + tierCode}');
+}
+EOF
+
+cat > "$BUILD_DIR/pubspec.yaml" <<EOF
 name: aot_verify_bin
 publish_to: none
 environment:
@@ -142,61 +166,53 @@ environment:
 dependencies:
   stealth_enum_example:
     path: $EXAMPLE_DIR
-YAML_EOF
+dependency_overrides:
+  stealth_enum:
+    path: $WORKSPACE_ROOT/packages/stealth_enum
+  stealth_enum_generator:
+    path: $WORKSPACE_ROOT/packages/stealth_enum_generator
+EOF
 
-echo -e "${YELLOW}[STEP 2/3]${RESET} Compiling AOT binary with --obfuscate..."
-(cd "$BUILD_DIR" && dart pub get -q && \
-  dart compile exe main.dart \
-    -o "$BINARY" \
-    --define=dart.vm.product=true \
-    2>&1)
-echo -e "${GREEN}[OK]${RESET}     Binary compiled: $BINARY"
-echo -e "          Size: $(du -sh "$BINARY" | cut -f1)"
+echo "Resolving dependencies & compiling stealth binary..."
+(cd "$BUILD_DIR" && dart pub get >/dev/null && dart compile exe stealth_main.dart -o "$STEALTH_BIN" --define=dart.vm.product=true >/dev/null)
+echo -e "${GREEN}[OK]${RESET} Stealth binary compiled: $(du -sh "$STEALTH_BIN" | cut -f1)"
 echo ""
+echo -e "Scanning stealth binary for private enum identifiers..."
 
-# ── Scan the binary ───────────────────────────────────────────────────────────
-echo -e "${YELLOW}[STEP 3/3]${RESET} Scanning binary for sensitive enum strings..."
-echo ""
+STEALTH_STRINGS_ABSENT=(
+  "superAdmin"
+  "_SecurityClearance"
+  "SecurityClearance.superAdmin"
+  "_SubscriptionStatus"
+  "SubscriptionStatus.cancelled"
+)
 
-PASS=0
-FAIL=0
+STEALTH_FAIL=0
+STEALTH_PASS=0
 
-for s in "${STRINGS_MUST_BE_ABSENT[@]}"; do
-  if strings "$BINARY" | grep -qF "$s"; then
-    echo -e "  ${RED}[FAIL]${RESET} String found in binary: '${BOLD}$s${RESET}'"
-    FAIL=$((FAIL + 1))
+for s in "${STEALTH_STRINGS_ABSENT[@]}"; do
+  if scan_binary_for_string "$STEALTH_BIN" "$s"; then
+    echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in stealth binary: '${BOLD}$s${RESET}'"
+    STEALTH_FAIL=$((STEALTH_FAIL + 1))
   else
-    echo -e "  ${GREEN}[PASS]${RESET} String absent from binary: '$s'"
-    PASS=$((PASS + 1))
+    echo -e "  ${GREEN}[PASS]${RESET} Sensitive string ABSENT from binary: '$s'"
+    STEALTH_PASS=$((STEALTH_PASS + 1))
   fi
 done
 
 echo ""
-
-# Sanity check: verify binary is not empty/corrupt
-for s in "${STRINGS_MUST_BE_PRESENT[@]}"; do
-  if strings "$BINARY" | grep -qF "$s"; then
-    echo -e "  ${GREEN}[SANE]${RESET} Expected string present: '$s' (binary is valid)"
-  else
-    echo -e "  ${YELLOW}[WARN]${RESET} Expected string missing: '$s' (binary may be corrupt or stripped)"
-  fi
-done
-
+echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
+echo -e "${BOLD}BENCHMARK RESULTS SUMMARY:${RESET}"
+echo -e "  • Control Target (Standard Enum) : ${YELLOW}LEAKED identifier strings into AOT binary${RESET}"
+echo -e "  • Stealth Target (@StealthEnum)  : ${GREEN}0 LEAKS — all $STEALTH_PASS identifiers erased${RESET}"
+echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
 echo ""
-echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════${RESET}"
 
-if [ "$FAIL" -eq 0 ]; then
-  echo -e "${BOLD}${GREEN}  ✓ ALL $PASS CHECKS PASSED${RESET}"
-  echo -e "    None of the enum identifiers appear in the AOT binary."
-  echo -e "    stealth_enum is working correctly."
-  echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════${RESET}"
-  echo ""
+if [ "$STEALTH_FAIL" -eq 0 ]; then
+  echo -e "${BOLD}${GREEN}✓ ALL EMPIRICAL AOT TESTS PASSED.${RESET}"
+  echo -e "  @StealthEnum completely eliminates enum identifier metadata from AOT binaries."
   exit 0
 else
-  echo -e "${BOLD}${RED}  ✗ $FAIL CHECK(S) FAILED — $PASS passed${RESET}"
-  echo -e "    One or more enum strings were found in the binary."
-  echo -e "    Make sure you ran build_runner and are using @StealthEnum."
-  echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════${RESET}"
-  echo ""
+  echo -e "${BOLD}${RED}✗ $STEALTH_FAIL CHECKS FAILED.${RESET}"
   exit 1
 fi

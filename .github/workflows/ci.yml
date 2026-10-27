@@ -39,7 +39,18 @@ jobs:
       - name: Test stealth_enum_generator
         run: |
           cd packages/stealth_enum_generator
+          dart pub get
           dart test
+
+      - name: Verify build_runner code generation
+        run: |
+          cd example
+          dart pub get
+          dart run build_runner build --delete-conflicting-outputs
+          git diff --exit-code lib/
+
+      - name: Run AOT String Removal Verification Benchmark
+        run: bash scripts/verify_aot_strings.sh
 
       - name: Install coverage tool
         run: dart pub global activate coverage

@@ -26,12 +26,15 @@ import 'package:meta/meta_meta.dart';
 /// inlined `.when()` / `.maybeWhen()` exhaustive helpers.
 @Target({TargetKind.enumType})
 final class StealthEnum {
-  /// Optional fixed seed for **deterministic** code generation.
+  /// Optional fixed seed for customizing the deterministic integer generation.
   ///
-  /// When non-null the generator uses `Random(seed)` to produce the same hex
-  /// values on every `build_runner` run, preventing unnecessary Git diffs in
-  /// CI pipelines. When null, values are seeded from the enum name + field
-  /// name hash, which is also stable across runs on the same codebase.
+  /// The generator uses a 32-bit FNV-1a hash combining the enum name, constant name,
+  /// and this [seed] (or `0xDEADBEEF` if omitted). Because values are derived
+  /// independently per constant, adding, removing, or reordering other constants
+  /// does not shift the values of existing constants.
+  ///
+  /// For exact, frozen raw integer values that must never change even across
+  /// renames, use the [@StealthValue] annotation on individual constants.
   final int? seed;
 
   /// Whether to generate `.when()` and `.maybeWhen()` exhaustive helper
@@ -49,22 +52,22 @@ final class StealthEnum {
   /// parameter to specify an explicit name instead.
   final String? name;
 
-  /// Whether to generate label-based ergonomic helpers: `.label`, `byLabel()`,
-  /// `toJson()`, and `fromJson()`. Defaults to `false`.
+  /// Whether to generate label-based ergonomic helpers: `.label` and `byLabel()`.
+  /// Defaults to `false`.
   ///
   /// **Security trade-off**: Enabling this emits human-readable label strings
   /// (e.g. `'admin'`, `'superAdmin'`) into the generated `.g.dart` file, which
   /// **will appear in the compiled binary**. The private source enum's strings
   /// are still fully erased, but the generated labels re-introduce readable
-  /// identifiers. Only enable this when you genuinely need serialization or
+  /// identifiers. Only enable this when you genuinely need display names or
   /// logging and you understand the trade-off.
+  ///
+  /// Note: [toJson] and [fromJson] are always generated on all extension types
+  /// because they operate exclusively on raw integers with zero string overhead.
   ///
   /// When enabled, the generated type gains:
   /// - `.label` → `String` name of the current variant (e.g. `'admin'`).
   /// - `byLabel(String)` → `T?` Looks up a variant by its label string.
-  /// - `toJson()` → `int` Serializes to the raw integer value.
-  /// - `fromJson(int)` → `T?` Deserializes from a raw integer (alias for
-  ///   `tryFromRawValue`).
   final bool generateLabel;
 
   /// Creates a [StealthEnum] annotation.
@@ -72,11 +75,39 @@ final class StealthEnum {
   /// Specify [seed] for deterministic integer generation, [generateWhen] to
   /// enable or disable `.when()` / `.maybeWhen()` helper generation, [name]
   /// to override the generated public extension type name, or [generateLabel]
-  /// to enable serialization and logging helpers.
+  /// to enable display name and label lookup helpers.
   const StealthEnum({
     this.seed,
     this.generateWhen = true,
     this.name,
     this.generateLabel = false,
   });
+}
+
+/// Optional annotation on an enum constant to explicitly specify its [rawValue].
+///
+/// Use this when you require an immutable, exact integer value across renames,
+/// or to match existing database records / backend protocol values.
+///
+/// If this annotation is omitted, the generator automatically derives a
+/// collision-free 32-bit hex value using a deterministic FNV-1a hash of the
+/// enum and field names.
+///
+/// ### Example
+/// ```dart
+/// @StealthEnum()
+/// enum _UserRole {
+///   @StealthValue(0x10000001)
+///   guest,
+///   @StealthValue(0x7F000002)
+///   admin,
+/// }
+/// ```
+@Target({TargetKind.enumValue})
+final class StealthValue {
+  /// The explicit raw integer value to assign to this enum constant.
+  final int value;
+
+  /// Creates a [StealthValue] annotation with an explicit [value].
+  const StealthValue(this.value);
 }
