@@ -420,9 +420,10 @@ packages:
   stealth_enum:
     dependency: "direct main"
     description:
-      path: "../stealth_enum"
-      relative: true
-    source: path
+      name: stealth_enum
+      sha256: "77c4636dbfb8a7c38eced680886002c6f6d845b489986204893a51edebf5ff36"
+      url: "https://pub.dev"
+    source: hosted
     version: "2.2.4"
   stream_channel:
     dependency: transitive
