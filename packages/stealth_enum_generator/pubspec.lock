@@ -266,7 +266,7 @@ packages:
     source: hosted
     version: "6.1.0"
   logging:
-    dependency: transitive
+    dependency: "direct dev"
     description:
       name: logging
       sha256: c8245ada5f1717ed44271ed1c26b8ce85ca3228fd2ffdb75468ab01979309d61
@@ -420,10 +420,11 @@ packages:
   stealth_enum:
     dependency: "direct main"
     description:
-      path: "../stealth_enum"
-      relative: true
-    source: path
-    version: "2.1.0"
+      name: stealth_enum
+      sha256: "39ae9111eb1d550857b3a35e0c1e9395a59684a8520732f02750f24bf832b4ea"
+      url: "https://pub.dev"
+    source: hosted
+    version: "2.2.0"
   stream_channel:
     dependency: transitive
     description:
