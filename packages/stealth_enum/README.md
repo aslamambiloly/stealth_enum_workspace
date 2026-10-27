@@ -445,8 +445,9 @@ Standard enums are often serialized as strings (`.name`) or indices (`.index`). 
 // Standard enum — serialized as string (fragile if enum is renamed)
 final json = {'role': role.name}; // → {'role': 'admin'}
 
-// stealth_enum — serialize as raw int (opaque, rename-safe)
-final json = {'role': role.rawValue}; // → {'role': 2128183628}
+// stealth_enum — serialize as raw int (opaque, zero strings in binary)
+// Tip: Use @StealthValue(int) to keep rawValue completely immutable across renames
+final json = {'role': role.rawValue}; // → {'role': 0x5B7DA15D}
 
 // ── Deserializing ────────────────────────────────────────────────────────────
 
@@ -525,22 +526,29 @@ log('User role changed to ${_roleNames[role]}');
 
 ### Persistence & Stability Model
 
-`stealth_enum` uses a 32-bit FNV-1a hash function to derive constant values:
-`hash = _fnv1a32(publicName) ^ _fnv1a32(fieldName) ^ (seed ?? 0xDEADBEEF)`
+`stealth_enum` uses **keyed HMAC-SHA256** over `'$publicName::$fieldName'` to derive constant values.
 
-This model provides specific guarantees:
+Key precedence:
+1. Explicit `key: '...'` string in `@StealthEnum(key: 'secret')`
+2. Explicit `seed: ...` integer in `@StealthEnum(seed: 0xCAFEBABE)`
+3. Default salt: `'stealth_enum:default_salt:0xDEADBEEF'`
 
-1. **Per-Constant Independence**:
+This model provides specific security and architectural guarantees:
+
+1. **Non-Linear Avalanche Effect (Differential Attack Resistance)**:
+   Because HMAC-SHA256 is a cryptographically secure pseudorandom function (PRF), XORing pairs of constants (`valA ^ valB`) does **not** cancel the key or enum name. Decompilers cannot perform differential wordlist recovery.
+
+2. **Per-Constant Independence**:
    Because each constant's value is derived independently, **adding, removing, or reordering other constants does NOT shift existing constants**.
    If you have `_UserRole { viewer, editor, admin }` and later insert `moderator` between `editor` and `admin`, the raw values for `viewer`, `editor`, and `admin` remain completely identical.
 
-2. **Cross-Enum Isolation**:
-   Even if you assign the same `seed` to two different enums, they will never share values because each enum's `publicName` is folded into every constant's seed.
+3. **Cross-Enum Isolation**:
+   Even if two enums use the same seed, they will never share values because each enum's `publicName` is folded into every constant's HMAC input.
 
-3. **Renaming Behavior**:
-   If you rename a constant (e.g. `editor` → `contentEditor`), its hash changes.
+4. **Renaming Behavior**:
+   If you rename an un-annotated constant (e.g. `editor` → `contentEditor`), its derived hash changes.
 
-4. **Guaranteed Immutability with `@StealthValue`**:
+5. **Guaranteed Immutability with `@StealthValue`**:
    For database persistence, API protocols, or to make values rename-proof forever, use the `@StealthValue` annotation:
 
    ```dart
@@ -557,6 +565,10 @@ This model provides specific guarantees:
    }
    ```
 
+> [!IMPORTANT]
+> **Upgrading from 2.0.x / 2.1.0:**
+> Version 2.2.0 upgraded the hashing algorithm from linear FNV-1a to keyed HMAC-SHA256 to eliminate differential XOR recovery attacks. If your application persisted raw integer values from 2.0.x / 2.1.0 into databases or storage, annotate those constants with their existing hex values using `@StealthValue(0x...)` before regenerating.
+
 ---
 
 ### Common patterns side-by-side
@@ -572,6 +584,8 @@ This model provides specific guarantees:
 // │  UserRole.values.byName(s)  │  UserRole.byLabel(s)            (returns T?)│
 // │  UserRole.values[i]         │  UserRole.tryFromRawValue(i)    (returns T?)│
 // │  switch (role) { ... }      │  role.when(...)   or  role.maybeWhen(...)    │
+// │  role.toJson()              │  role.toJson()   (always emitted, returns int)│
+// │  UserRole.fromJson(i)       │  UserRole.fromJson(i)           (returns T?)│
 // └─────────────────────────────┴──────────────────────────────────────────────┘
 ```
 
@@ -591,83 +605,100 @@ part of 'security_clearance.dart';
 // **************************************************************************
 
 extension type const SecurityClearance._(int rawValue) {
-  static const SecurityClearance guest = SecurityClearance._(0x373D1B37);
-  static const SecurityClearance operator = SecurityClearance._(0x764AE932);
-  static const SecurityClearance admin = SecurityClearance._(0x7C06254C);
-  static const SecurityClearance superAdmin = SecurityClearance._(0x3154C03F);
+  static const SecurityClearance guest = SecurityClearance._(0x5B7DA15D);
+  static const SecurityClearance operator = SecurityClearance._(0x44EE678C);
+  static const SecurityClearance admin = SecurityClearance._(0x18C38206);
+  static const SecurityClearance superAdmin = SecurityClearance._(0x59EA165F);
 
+  /// Creates a [SecurityClearance] instance from [rawValue] at runtime.
   const factory SecurityClearance.fromRawValue(int rawValue) =
       SecurityClearance._;
 
+  /// Safely parses [rawValue] into a [SecurityClearance], returning `null` if unknown.
   static SecurityClearance? tryFromRawValue(int rawValue) {
     return switch (rawValue) {
-      0x373D1B37 => guest,
-      0x764AE932 => operator,
-      0x7C06254C => admin,
-      0x3154C03F => superAdmin,
+      0x5B7DA15D => guest,
+      0x44EE678C => operator,
+      0x18C38206 => admin,
+      0x59EA165F => superAdmin,
       _ => null,
     };
   }
 
-  static const List<SecurityClearance> values = <SecurityClearance>[
+  /// Returns `true` if this instance represents a valid, recognized constant.
+  bool get isValid => tryFromRawValue(rawValue) != null;
+
+  /// Serializes this [SecurityClearance] to its integer [rawValue].
+  int toJson() => rawValue;
+
+  /// Deserializes an integer [rawValue] into a [SecurityClearance], returning `null` on unknown value.
+  static SecurityClearance? fromJson(int rawValue) => tryFromRawValue(rawValue);
+
+  /// All recognized constants of [SecurityClearance].
+  static const List<SecurityClearance> values = [
     guest,
     operator,
     admin,
     superAdmin,
   ];
 
-  bool get isValid => SecurityClearance.values.contains(this);
-
+  /// Exhaustive pattern matching across all variants.
   @pragma('vm:prefer-inline')
-  T when<T>({
-    required T Function() guest,
-    required T Function() operator,
-    required T Function() admin,
-    required T Function() superAdmin,
+  R when<R>({
+    required R Function() guest,
+    required R Function() operator,
+    required R Function() admin,
+    required R Function() superAdmin,
   }) {
     return switch (rawValue) {
-      0x373D1B37 => guest(),
-      0x764AE932 => operator(),
-      0x7C06254C => admin(),
-      0x3154C03F => superAdmin(),
+      0x5B7DA15D => guest(),
+      0x44EE678C => operator(),
+      0x18C38206 => admin(),
+      0x59EA165F => superAdmin(),
       _ => throw StateError(''), // Fails closed without leaking strings
     };
   }
 
+  /// Partial pattern matching with a required [orElse] fallback.
   @pragma('vm:prefer-inline')
-  T maybeWhen<T>({
-    T Function()? guest,
-    T Function()? operator,
-    T Function()? admin,
-    T Function()? superAdmin,
-    required T Function() orElse,
+  R maybeWhen<R>({
+    R Function()? guest,
+    R Function()? operator,
+    R Function()? admin,
+    R Function()? superAdmin,
+    required R Function() orElse,
   }) {
     return switch (rawValue) {
-      0x373D1B37 when guest != null => guest(),
-      0x764AE932 when operator != null => operator(),
-      0x7C06254C when admin != null => admin(),
-      0x3154C03F when superAdmin != null => superAdmin(),
+      0x5B7DA15D when guest != null => guest(),
+      0x44EE678C when operator != null => operator(),
+      0x18C38206 when admin != null => admin(),
+      0x59EA165F when superAdmin != null => superAdmin(),
       _ => orElse(),
     };
   }
 }
 ```
 
-With `generateLabel: true`, the following helpers are also generated:
+With `generateLabel: true`, string label ergonomics are emitted into the extension type:
 
 ```dart
   // String labels appear in the compiled binary when generateLabel: true.
-  String get label => switch (rawValue) {
-    0x373D1B37 => 'guest',
-    0x764AE932 => 'operator',
-    0x7C06254C => 'admin',
-    0x3154C03F => 'superAdmin',
-    _ => 'unknown($rawValue)',
+  String get label => switch (this) {
+    guest => 'guest',
+    operator => 'operator',
+    admin => 'admin',
+    superAdmin => 'superAdmin',
+    _ => 'unknown',
   };
 
-  static SecurityClearance? byLabel(String label) { ... }
-  int toJson() => rawValue;
-  static SecurityClearance? fromJson(int json) => tryFromRawValue(json);
+  static SecurityClearance? byLabel(String label) => switch (label) {
+    'guest' => guest,
+    'operator' => operator,
+    'admin' => admin,
+    'superAdmin' => superAdmin,
+    _ => null,
+  };
+```
 ```
 
 ## Empirical AOT Verification Benchmark

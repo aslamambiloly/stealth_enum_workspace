@@ -243,7 +243,7 @@ void main() {
       expect(AppTheme.system.label, equals('system'));
       // Unknown rawValue produces fallback label
       final unknown = AppTheme.fromRawValue(0x12345678);
-      expect(unknown.label, equals('unknown(305419896)'));
+      expect(unknown.label, equals('unknown'));
     });
 
     test('byLabel parses string and returns null on unknown', () {

@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:analyzer/dart/element/element.dart';
 import 'package:build/build.dart';
+import 'package:crypto/crypto.dart';
 import 'package:source_gen/source_gen.dart';
 import 'package:stealth_enum/stealth_enum.dart';
 
@@ -7,9 +9,15 @@ import 'package:stealth_enum/stealth_enum.dart';
 /// annotated private enum.
 ///
 /// ### Security design decisions
-/// * Values are **deterministic** (seeded from enum + field name hash) so
-///   repeated `build_runner` runs don't dirty Git diffs, yet look completely
-///   non-sequential in Ghidra ARM64 assembly.
+/// * Values are derived using **HMAC-SHA256** keyed with an optional user-supplied
+///   secret [key], [seed], or default salt over `'$publicName::$fieldName'`.
+///   Because HMAC-SHA256 satisfies the strict avalanche criterion and is a
+///   cryptographically secure pseudorandom function (PRF), XOR differential
+///   attacks (such as XORing pairs of constants) cannot cancel out the key or
+///   recover enum or constant names.
+/// * Constants annotated with `@StealthValue(int)` use explicit, frozen 32-bit
+///   integers, providing guaranteed backwards compatibility with databases
+///   and external APIs.
 /// * Every case in `.when()` matches an explicit hex constant. The wildcard `_`
 ///   branch fails closed by throwing `StateError('')` without leaking strings,
 ///   preventing invalid/tampered values from executing privileged branches.
@@ -22,6 +30,20 @@ import 'package:stealth_enum/stealth_enum.dart';
 class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
   /// Creates a [StealthEnumGenerator] instance.
   const StealthEnumGenerator();
+
+  static const Set<String> _reservedNames = {
+    'when',
+    'maybeWhen',
+    'rawValue',
+    'values',
+    'isValid',
+    'tryFromRawValue',
+    'fromJson',
+    'toJson',
+    'label',
+    'byLabel',
+    'orElse',
+  };
 
   @override
   dynamic generateForAnnotatedElement(
@@ -42,22 +64,29 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     final String sourceName =
         enumEl.name ?? enumEl.displayName; // e.g. '_UserFlow'
 
+    // Enforce private enum declaration to guarantee AOT tree-shaking
+    if (!sourceName.startsWith('_')) {
+      throw InvalidGenerationSourceError(
+        '@StealthEnum can only be applied to private enum declarations starting with a leading underscore (e.g. "_$sourceName").\n'
+        'Public enums are preserved in Dart AOT binaries to support .name and reflection, defeating obfuscation.\n'
+        'Rename the enum to "_$sourceName" so the Dart compiler can completely tree-shake the original enum metadata.',
+        element: element,
+        todo: 'Add a leading underscore to the enum name: "_$sourceName".',
+      );
+    }
+
     // Determine the public generated name.
     final String? nameOverride = annotation.peek('name')?.stringValue;
-    final String publicName = nameOverride ??
-        (sourceName.startsWith('_')
-            ? sourceName.substring(1) // '_UserFlow' → 'UserFlow'
-            : '${sourceName}Stealth'); // 'UserFlow' → 'UserFlowStealth'
+    final String publicName = nameOverride ?? sourceName.substring(1);
 
     final bool generateWhen =
         annotation.peek('generateWhen')?.boolValue ?? true;
     final bool generateLabel =
         annotation.peek('generateLabel')?.boolValue ?? false;
     final int? seedOverride = annotation.peek('seed')?.intValue;
+    final String? keyOverride = annotation.peek('key')?.stringValue;
 
     // ── Extract enum constants ────────────────────────────────────────────────
-    // Use .constants (the proper EnumElement API) to avoid synthetic fields
-    // like `index`, `values`, `_name`, etc.
     final List<FieldElement> constants =
         enumEl.fields.where((f) => f.isEnumConstant).toList();
 
@@ -68,11 +97,28 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
       );
     }
 
+    // Validate that constant names do not collide with generated member names
+    for (final field in constants) {
+      final fieldName = field.name ?? field.displayName;
+      if (_reservedNames.contains(fieldName)) {
+        throw InvalidGenerationSourceError(
+          'Enum constant "$fieldName" in enum "$publicName" collides with a generated extension type member or parameter.\n'
+          'Reserved names: ${_reservedNames.join(', ')}.',
+          element: field,
+          todo: 'Rename the constant "$fieldName" to avoid collision with generated members.',
+        );
+      }
+    }
+
     // ── Generate collision-free 32-bit hex values ─────────────────────────────
     final List<String> fieldNames =
         constants.map((f) => f.name ?? f.displayName).toList();
-    final Map<String, int> valueMap =
-        _generateValues(publicName, constants, seedOverride);
+    final Map<String, int> valueMap = _generateValues(
+      publicName,
+      constants,
+      keyOverride,
+      seedOverride,
+    );
 
     // ── Emit code ─────────────────────────────────────────────────────────────
     final buffer = StringBuffer();
@@ -100,19 +146,6 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     return null;
   }
 
-  /// Computes a deterministic 32-bit FNV-1a hash of a UTF-16 string.
-  ///
-  /// Unlike `String.hashCode`, FNV-1a is 100% stable across Dart SDK versions,
-  /// VM implementations, 32-bit/64-bit platforms, and Web targets.
-  static int _fnv1a32(String s) {
-    var hash = 0x811c9dc5; // 2166136261 (FNV offset basis)
-    for (var i = 0; i < s.length; i++) {
-      hash ^= s.codeUnitAt(i);
-      hash = (hash * 0x01000193) & 0xFFFFFFFF; // 16777619 (FNV prime)
-    }
-    return hash;
-  }
-
   /// Normalizes a 32-bit integer into the positive hex range [0x10000000 .. 0x7FFFFFFF].
   ///
   /// This avoids negative numbers on 32-bit platforms/Web, ensures a non-zero high nibble,
@@ -125,18 +158,59 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     return positive;
   }
 
+  /// Formats an integer as a clean 8-character uppercase hexadecimal constant.
+  static String _formatHex(int value) =>
+      '0x${value.toRadixString(16).toUpperCase().padLeft(8, '0')}';
+
+  /// Computes a cryptographically keyed 32-bit integer for a given constant using HMAC-SHA256.
+  ///
+  /// Key precedence:
+  /// 1. Explicit [keyOverride] string in `@StealthEnum(key: '...')`
+  /// 2. Explicit [seedOverride] integer in `@StealthEnum(seed: ...)`
+  /// 3. Default salt: `stealth_enum:default_salt:0xDEADBEEF`
+  ///
+  /// Because HMAC-SHA256 is a cryptographically secure pseudorandom function (PRF)
+  /// that satisfies the strict avalanche criterion, XOR differential attacks
+  /// (e.g. `valA ^ valB`) cannot cancel out the key or enum name.
+  static int _computeKeyedHash(
+    String publicName,
+    String fieldName, {
+    String? keyOverride,
+    int? seedOverride,
+  }) {
+    final List<int> keyBytes;
+    if (keyOverride != null && keyOverride.isNotEmpty) {
+      keyBytes = utf8.encode(keyOverride);
+    } else if (seedOverride != null) {
+      keyBytes = utf8.encode('stealth_enum:seed:$seedOverride');
+    } else {
+      keyBytes = utf8.encode('stealth_enum:default_salt:0xDEADBEEF');
+    }
+
+    final hmac = Hmac(sha256, keyBytes);
+    final digest = hmac.convert(utf8.encode('$publicName::$fieldName'));
+    final bytes = digest.bytes;
+    final raw = ((bytes[0] & 0xFF) << 24) |
+        ((bytes[1] & 0xFF) << 16) |
+        ((bytes[2] & 0xFF) << 8) |
+        (bytes[3] & 0xFF);
+    return _toPositive32(raw);
+  }
+
   /// Generates deterministic, collision-free 32-bit hex integers for each
   /// enum constant.
   ///
   /// 1. Constants annotated with `@StealthValue(int)` use their explicit values.
-  /// 2. Other constants derive their value from an FNV-1a hash of their own name,
-  ///    the public enum name, and an optional seed.
+  /// 2. Other constants derive their value from keyed HMAC-SHA256 of their name,
+  ///    the public enum name, and an optional secret key or seed.
   ///
-  /// Because each constant's value is derived independently, adding, removing,
-  /// or reordering other constants will NOT shift the values of existing constants.
+  /// Because each constant's value is derived independently via HMAC-SHA256,
+  /// adding, removing, or reordering other constants will NOT shift the values
+  /// of existing constants, and XOR differential attacks cannot recover names.
   Map<String, int> _generateValues(
     String publicName,
     List<FieldElement> constants,
+    String? keyOverride,
     int? seedOverride,
   ) {
     final usedValues = <int>{};
@@ -148,9 +222,26 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
       final fieldName = field.name ?? field.displayName;
       final explicitValue = _readExplicitValue(field);
       if (explicitValue != null) {
+        if (explicitValue < 0 || explicitValue > 0xFFFFFFFF) {
+          throw InvalidGenerationSourceError(
+            '@StealthValue($explicitValue) on constant "$fieldName" in enum "$publicName" is invalid. '
+            'Values must be positive 32-bit unsigned integers between 0x0 and 0xFFFFFFFF.',
+            element: field,
+            todo: 'Specify a positive 32-bit integer, e.g. @StealthValue(0x10000001).',
+          );
+        }
+        if (explicitValue < 0x1000) {
+          throw InvalidGenerationSourceError(
+            '@StealthValue($explicitValue) on constant "$fieldName" in enum "$publicName" is too small. '
+            'Values below 0x1000 defeat reverse-engineering resistance by creating low sequential jump tables. '
+            'Use high-entropy constants (>= 0x10000).',
+            element: field,
+            todo: 'Choose a high-entropy hex constant, e.g. @StealthValue(0x10000001).',
+          );
+        }
         if (usedValues.contains(explicitValue)) {
           throw InvalidGenerationSourceError(
-            'Duplicate @StealthValue(0x${explicitValue.toRadixString(16).toUpperCase()}) '
+            'Duplicate @StealthValue(${_formatHex(explicitValue)}) '
             'found on constant "$fieldName" in enum "$publicName". All values must be unique.',
             element: field,
           );
@@ -161,22 +252,29 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
       }
     }
 
-    // 2. Pass 2: Derive deterministic FNV-1a hashes for un-annotated constants
-    final baseSalt = seedOverride ?? 0xDEADBEEF;
-    final nameHash = _fnv1a32(publicName);
-
+    // 2. Pass 2: Derive keyed HMAC-SHA256 values for un-annotated constants
     for (final field in constants) {
       final fieldName = field.name ?? field.displayName;
       if (explicitValues.containsKey(fieldName)) continue;
 
-      final fieldHash = _fnv1a32(fieldName);
-      final fieldSeed = (baseSalt ^ nameHash ^ fieldHash) & 0xFFFFFFFF;
-
-      int value = _toPositive32(fieldSeed);
+      int value = _computeKeyedHash(
+        publicName,
+        fieldName,
+        keyOverride: keyOverride,
+        seedOverride: seedOverride,
+      );
       int probe = 0;
       while (usedValues.contains(value)) {
         probe++;
-        value = _toPositive32((fieldSeed + (probe * 0x10007)) & 0x7FFFFFFF);
+        final hmac = Hmac(sha256, utf8.encode('stealth_probe:$probe'));
+        final digest =
+            hmac.convert(utf8.encode('$publicName::$fieldName::$value'));
+        final b = digest.bytes;
+        final raw = ((b[0] & 0xFF) << 24) |
+            ((b[1] & 0xFF) << 16) |
+            ((b[2] & 0xFF) << 8) |
+            (b[3] & 0xFF);
+        value = _toPositive32(raw);
       }
 
       usedValues.add(value);
@@ -202,7 +300,7 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
 
     // Static constants
     for (final name in fieldNames) {
-      final hex = '0x${valueMap[name]!.toRadixString(16).toUpperCase()}';
+      final hex = _formatHex(valueMap[name]!);
       buf.writeln('  static const $publicName $name = $publicName._($hex);');
     }
 
@@ -221,56 +319,46 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     buf.writeln('  static $publicName? tryFromRawValue(int rawValue) {');
     buf.writeln('    return switch (rawValue) {');
     for (final name in fieldNames) {
-      final hex = '0x${valueMap[name]!.toRadixString(16).toUpperCase()}';
+      final hex = _formatHex(valueMap[name]!);
       buf.writeln('      $hex => $name,');
     }
     buf.writeln('      _ => null,');
     buf.writeln('    };');
     buf.writeln('  }');
     buf.writeln();
-
-    // values list
     buf.writeln(
-        '  static const List<$publicName> values = <$publicName>[');
+        '  /// Returns `true` if this instance represents a valid, recognized constant.');
+    buf.writeln('  bool get isValid => tryFromRawValue(rawValue) != null;');
+    buf.writeln();
+    buf.writeln(
+        '  /// Serializes this [$publicName] to its integer [rawValue].');
+    buf.writeln('  ///');
+    buf.writeln(
+        '  /// Integer serialization leaks zero string identifiers into compiled AOT binaries.');
+    buf.writeln('  int toJson() => rawValue;');
+    buf.writeln();
+    buf.writeln(
+        '  /// Deserializes an integer [rawValue] into a [$publicName], returning `null` on unknown value.');
+    buf.writeln(
+        '  static $publicName? fromJson(int rawValue) => tryFromRawValue(rawValue);');
+    buf.writeln();
+
+    // Constant values list
+    buf.writeln('  /// All recognized constants of [$publicName].');
+    buf.writeln('  static const List<$publicName> values = [');
     for (final name in fieldNames) {
       buf.writeln('    $name,');
     }
     buf.writeln('  ];');
-    buf.writeln();
 
-    // isValid getter
-    buf.writeln(
-        '  /// Whether this instance holds a recognized constant value.');
-    buf.writeln(
-        '  bool get isValid => $publicName.values.contains(this);');
-    buf.writeln();
-
-    // toJson / fromJson (always emitted — 100% zero string overhead)
-    buf.writeln(
-        '  /// Serializes this [$publicName] to its raw integer value for JSON/storage.');
-    buf.writeln('  ///');
-    buf.writeln(
-        '  /// Operates entirely on raw integers with zero string overhead in compiled binaries.');
-    buf.writeln('  int toJson() => rawValue;');
-    buf.writeln();
-    buf.writeln(
-        '  /// Deserializes a [$publicName] from a raw JSON integer.');
-    buf.writeln('  ///');
-    buf.writeln(
-        '  /// Returns `null` if [rawValue] does not match any recognized variant.');
-    buf.writeln(
-        '  static $publicName? fromJson(int rawValue) => tryFromRawValue(rawValue);');
-
+    // Label helpers (if enabled)
     if (generateLabel) {
-      buf.writeln();
-      _writeLabelHelpers(buf, publicName, fieldNames, valueMap);
+      _writeLabelHelpers(buf, publicName, fieldNames);
     }
 
+    // Exhaustive pattern matching helpers (if enabled)
     if (generateWhen) {
-      buf.writeln();
-      _writeWhen(buf, publicName, fieldNames, valueMap);
-      buf.writeln();
-      _writeMaybeWhen(buf, publicName, fieldNames, valueMap);
+      _writeWhenHelpers(buf, publicName, fieldNames, valueMap);
     }
 
     buf.writeln('}');
@@ -280,106 +368,92 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     StringBuffer buf,
     String publicName,
     List<String> fieldNames,
-    Map<String, int> valueMap,
   ) {
-    buf.writeln(
-        '  // ── Label helpers (generateLabel: true) ─────────────────────────');
+    buf.writeln();
+    buf.writeln('  // '
+        '─────────────────────────────────────────────────────────────────────────');
+    buf.writeln('  // Label Ergonomics (generateLabel: true)');
     buf.writeln('  //');
+    buf.writeln('  // [SECURITY WARNING]');
     buf.writeln(
-        '  // NOTE: These helpers emit plain-text string literals into the compiled');
+        '  // These helpers emit human-readable string literals into the generated file.');
     buf.writeln(
-        '  // binary. The private source enum strings are fully erased, but these');
-    buf.writeln(
-        '  // generated labels re-introduce readable names. Use only when you need');
-    buf.writeln(
-        '  // display labels or logging and you understand the security trade-off.');
+        '  // These strings WILL be retained in the compiled AOT binary (libapp.so).');
+    buf.writeln('  // '
+        '─────────────────────────────────────────────────────────────────────────');
     buf.writeln();
-
-    // .label getter
     buf.writeln(
-        "  /// The human-readable label for this variant (e.g. `'admin'`).");
-    buf.writeln('  ///');
-    buf.writeln('  /// Equivalent to `.name` on a standard Dart `enum`.');
-    buf.writeln(
-        '  /// **Note**: This string will be present in AOT binaries (see `generateLabel`).');
-    buf.writeln('  String get label => switch (rawValue) {');
-    for (final name in fieldNames) {
-      final hex = '0x${valueMap[name]!.toRadixString(16).toUpperCase()}';
-      buf.writeln("    $hex => '$name',");
-    }
-    buf.writeln("    _ => 'unknown(\$rawValue)',");
-    buf.writeln('  };');
-    buf.writeln();
-
-    // byLabel()
-    buf.writeln(
-        '  /// Looks up a [$publicName] variant by its [label] string.');
+        '  /// Returns the original enum constant name as a string (equivalent to `enum.name`).');
     buf.writeln('  ///');
     buf.writeln(
-        '  /// Returns `null` if [label] does not match any known variant.');
-    buf.writeln(
-        '  /// Equivalent to `$publicName.byName(label)` on a standard `enum`.');
-    buf.writeln('  static $publicName? byLabel(String label) {');
-    buf.writeln('    return switch (label) {');
+        '  /// **Note**: This emits plain-text string literals into the compiled binary.');
+    buf.writeln('  String get label => switch (this) {');
     for (final name in fieldNames) {
-      buf.writeln("      '$name' => $name,");
+      buf.writeln("        $name => '$name',");
     }
-    buf.writeln('      _ => null,');
-    buf.writeln('    };');
-    buf.writeln('  }');
+    buf.writeln("        _ => 'unknown',");
+    buf.writeln('      };');
+    buf.writeln();
+    buf.writeln(
+        '  /// Looks up a [$publicName] by its [label] string (equivalent to `values.byName`).');
+    buf.writeln('  ///');
+    buf.writeln('  /// Returns `null` if no variant matches the given label.');
+    buf.writeln('  static $publicName? byLabel(String label) => switch (label) {');
+    for (final name in fieldNames) {
+      buf.writeln("        '$name' => $name,");
+    }
+    buf.writeln('        _ => null,');
+    buf.writeln('      };');
   }
 
-  void _writeWhen(
+  void _writeWhenHelpers(
     StringBuffer buf,
     String publicName,
     List<String> fieldNames,
     Map<String, int> valueMap,
   ) {
-    buf.writeln('  /// Exhaustive compile-time condition flow.');
+    // ── when() ───────────────────────────────────────────────────────────────
+    buf.writeln();
+    buf.writeln('  /// Exhaustive pattern matching across all variants.');
     buf.writeln('  ///');
+    buf.writeln('  /// Marked with `@pragma(\'vm:prefer-inline\')` to inline');
     buf.writeln(
-        '  /// Every case must be handled — adding a new value to the source enum');
-    buf.writeln(
-        '  /// breaks compilation here until handled. Inlined by AOT into raw integer');
-    buf.writeln(
-        '  /// comparisons; the method itself is stripped from the binary.');
-    buf.writeln("  @pragma('vm:prefer-inline')");
-    buf.writeln('  T when<T>({');
+        '  /// branch dispatch directly at the call site, eliminating helper');
+    buf.writeln('  /// symbols from the compiled binary symbol table.');
+    buf.writeln('  @pragma(\'vm:prefer-inline\')');
+    buf.writeln('  R when<R>({');
     for (final name in fieldNames) {
-      buf.writeln('    required T Function() $name,');
+      buf.writeln('    required R Function() $name,');
     }
     buf.writeln('  }) {');
     buf.writeln('    return switch (rawValue) {');
-
     for (final name in fieldNames) {
-      final hex = '0x${valueMap[name]!.toRadixString(16).toUpperCase()}';
+      final hex = _formatHex(valueMap[name]!);
       buf.writeln('      $hex => $name(),');
     }
-    // Fail-closed fallback: never execute any branch on an unknown or corrupted value.
-    buf.writeln("      _ => throw StateError(''),");
-
+    // Fail-closed wildcard branch: throws without leaking string identifiers
+    buf.writeln('      _ => throw StateError(\'\'),');
     buf.writeln('    };');
     buf.writeln('  }');
-  }
 
-  void _writeMaybeWhen(
-    StringBuffer buf,
-    String publicName,
-    List<String> fieldNames,
-    Map<String, int> valueMap,
-  ) {
+    // ── maybeWhen() ───────────────────────────────────────────────────────────
+    buf.writeln();
+    buf.writeln('  /// Partial pattern matching with a required [orElse] fallback.');
+    buf.writeln('  ///');
+    buf.writeln('  /// Marked with `@pragma(\'vm:prefer-inline\')` to inline');
     buf.writeln(
-        '  /// Partial condition flow with required [orElse] fallback.');
-    buf.writeln("  @pragma('vm:prefer-inline')");
-    buf.writeln('  T maybeWhen<T>({');
+        '  /// branch dispatch directly at the call site, eliminating helper');
+    buf.writeln('  /// symbols from the compiled binary symbol table.');
+    buf.writeln('  @pragma(\'vm:prefer-inline\')');
+    buf.writeln('  R maybeWhen<R>({');
     for (final name in fieldNames) {
-      buf.writeln('    T Function()? $name,');
+      buf.writeln('    R Function()? $name,');
     }
-    buf.writeln('    required T Function() orElse,');
+    buf.writeln('    required R Function() orElse,');
     buf.writeln('  }) {');
     buf.writeln('    return switch (rawValue) {');
     for (final name in fieldNames) {
-      final hex = '0x${valueMap[name]!.toRadixString(16).toUpperCase()}';
+      final hex = _formatHex(valueMap[name]!);
       buf.writeln('      $hex when $name != null => $name(),');
     }
     buf.writeln('      _ => orElse(),');

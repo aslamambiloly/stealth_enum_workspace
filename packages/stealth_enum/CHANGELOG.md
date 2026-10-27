@@ -1,3 +1,14 @@
+## 2.2.0
+
+### Security & Hardening
+* Added `key: String?` parameter to `@StealthEnum(key: '...')` for custom keyed HMAC derivation.
+* Hashing upgraded from linear FNV-1a to **keyed HMAC-SHA256**: satisfies the strict avalanche criterion and eliminates XOR differential attacks (`valA ^ valB` no longer cancels the key or enum name).
+* Added range validation to `@StealthValue`: values must be positive 32-bit unsigned integers (`0x0` to `0xFFFFFFFF`), requiring `>= 0x1000` to prevent low sequential jump tables.
+* Added compile-time validation enforcing private enums (leading `_`) to ensure Dart AOT tree-shaking.
+* Added compile-time check preventing constant names from colliding with generated extension type members.
+
+> **Migration from 2.0.x / 2.1.0:** The HMAC-SHA256 upgrade modifies the derived integer values for un-annotated constants. If you persisted 2.0.x / 2.1.0 raw integer values into databases or storage, freeze those values using `@StealthValue(0x...)` before regenerating.
+
 ## 2.1.0
 
 ### New Features

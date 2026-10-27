@@ -14,10 +14,12 @@ void main() {
     test('custom values are stored correctly', () {
       const annotation = StealthEnum(
         seed: 12345,
+        key: 'project_secret_salt',
         generateWhen: false,
         name: 'CustomStatus',
       );
       expect(annotation.seed, equals(12345));
+      expect(annotation.key, equals('project_secret_salt'));
       expect(annotation.generateWhen, isFalse);
       expect(annotation.name, equals('CustomStatus'));
       expect(annotation.generateLabel, isFalse);

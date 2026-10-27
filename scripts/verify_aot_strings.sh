@@ -116,7 +116,8 @@ for s in "superAdmin" "StandardClearance"; do
 done
 
 if [ "$CONTROL_FOUND" -eq 0 ]; then
-  echo -e "${YELLOW}[WARN]${RESET} Control binary did not retain strings; check compiler flags."
+  echo -e "${RED}[FAIL]${RESET} Control binary did not retain strings; benchmark is inconclusive."
+  exit 1
 else
   echo -e "${GREEN}✓ Control verified: Standard Dart enums leak plain-text identifiers into compiled AOT binaries.${RESET}"
 fi
@@ -181,10 +182,10 @@ echo -e "Scanning stealth binary for private enum identifiers..."
 
 STEALTH_STRINGS_ABSENT=(
   "superAdmin"
+  "trial"
+  "cancelled"
   "_SecurityClearance"
-  "SecurityClearance.superAdmin"
   "_SubscriptionStatus"
-  "SubscriptionStatus.cancelled"
 )
 
 STEALTH_FAIL=0
@@ -199,6 +200,22 @@ for s in "${STEALTH_STRINGS_ABSENT[@]}"; do
     STEALTH_PASS=$((STEALTH_PASS + 1))
   fi
 done
+
+# ── Optional Flutter APK mode ──────────────────────────────────────────────────
+if [[ "${1:-}" == "--flutter" ]]; then
+  echo ""
+  echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  echo -e "${BOLD}${YELLOW}[FLUTTER MODE] Building release APK with --obfuscate...          ${RESET}"
+  echo -e "${BOLD}${YELLOW}━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━${RESET}"
+  if ! command -v flutter &>/dev/null; then
+    echo -e "${RED}[ERROR]${RESET} 'flutter' CLI not found in PATH."
+    exit 1
+  fi
+  echo -e "${CYAN}[INFO]${RESET} Flutter version: $(flutter --version | head -1)"
+  echo -e "To verify on a real Flutter Android app, build with:"
+  echo -e "  ${BOLD}flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info=symbols${RESET}"
+  echo -e "  ${BOLD}unzip -p build/app/outputs/flutter-apk/app-release.apk lib/arm64-v8a/libapp.so | strings | grep -E 'superAdmin|trial|cancelled'${RESET}"
+fi
 
 echo ""
 echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"

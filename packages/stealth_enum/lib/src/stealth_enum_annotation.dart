@@ -26,16 +26,27 @@ import 'package:meta/meta_meta.dart';
 /// inlined `.when()` / `.maybeWhen()` exhaustive helpers.
 @Target({TargetKind.enumType})
 final class StealthEnum {
-  /// Optional fixed seed for customizing the deterministic integer generation.
+  /// Optional fixed integer seed for customizing the deterministic generation.
   ///
-  /// The generator uses a 32-bit FNV-1a hash combining the enum name, constant name,
-  /// and this [seed] (or `0xDEADBEEF` if omitted). Because values are derived
-  /// independently per constant, adding, removing, or reordering other constants
-  /// does not shift the values of existing constants.
+  /// The generator uses HMAC-SHA256 keyed with this seed (or [key] if provided)
+  /// over `'$publicName::$fieldName'`. Because values are derived independently
+  /// per constant via a cryptographically keyed pseudorandom function (PRF),
+  /// adding, removing, or reordering other constants does not shift the values
+  /// of existing constants, and XOR differential attacks cannot recover names.
   ///
   /// For exact, frozen raw integer values that must never change even across
   /// renames, use the [@StealthValue] annotation on individual constants.
   final int? seed;
+
+  /// Optional secret key or salt string for HMAC-SHA256 derivation.
+  ///
+  /// When provided, the generator derives constant values using HMAC-SHA256
+  /// keyed with this secret string over `'$publicName::$fieldName'`.
+  ///
+  /// Because HMAC-SHA256 satisfies the strict avalanche criterion, knowledge
+  /// of raw constants does NOT leak enum or constant names, and differential
+  /// attacks (such as XORing pairs of constants) cannot cancel out the key.
+  final String? key;
 
   /// Whether to generate `.when()` and `.maybeWhen()` exhaustive helper
   /// methods. Defaults to `true`.
@@ -47,9 +58,7 @@ final class StealthEnum {
   /// Optional override for the generated public type name.
   ///
   /// By default the generator strips the leading `_` from the source enum
-  /// name. If the source enum is not private (e.g. `enum MyEnum`) the
-  /// generator appends `Stealth` to produce `MyEnumStealth`. Use this
-  /// parameter to specify an explicit name instead.
+  /// name. Use this parameter to specify an explicit name instead.
   final String? name;
 
   /// Whether to generate label-based ergonomic helpers: `.label` and `byLabel()`.
@@ -72,12 +81,13 @@ final class StealthEnum {
 
   /// Creates a [StealthEnum] annotation.
   ///
-  /// Specify [seed] for deterministic integer generation, [generateWhen] to
-  /// enable or disable `.when()` / `.maybeWhen()` helper generation, [name]
+  /// Specify [seed] or [key] for keyed cryptographic integer generation, [generateWhen]
+  /// to enable or disable `.when()` / `.maybeWhen()` helper generation, [name]
   /// to override the generated public extension type name, or [generateLabel]
   /// to enable display name and label lookup helpers.
   const StealthEnum({
     this.seed,
+    this.key,
     this.generateWhen = true,
     this.name,
     this.generateLabel = false,
@@ -90,8 +100,13 @@ final class StealthEnum {
 /// or to match existing database records / backend protocol values.
 ///
 /// If this annotation is omitted, the generator automatically derives a
-/// collision-free 32-bit hex value using a deterministic FNV-1a hash of the
-/// enum and field names.
+/// collision-free 32-bit hex value using keyed HMAC-SHA256 of the enum and
+/// field names.
+///
+/// The [value] must be a positive 32-bit unsigned integer (`0x0` to `0xFFFFFFFF`).
+/// To maintain reverse-engineering resistance, use high-entropy constants
+/// (`>= 0x10000`) rather than small sequential numbers (e.g. `1, 2, 3`) to
+/// prevent decompilers from identifying sequential jump tables.
 ///
 /// ### Example
 /// ```dart
@@ -106,6 +121,7 @@ final class StealthEnum {
 @Target({TargetKind.enumValue})
 final class StealthValue {
   /// The explicit raw integer value to assign to this enum constant.
+  /// Must be an unsigned 32-bit integer in the range [0x0 .. 0xFFFFFFFF].
   final int value;
 
   /// Creates a [StealthValue] annotation with an explicit [value].

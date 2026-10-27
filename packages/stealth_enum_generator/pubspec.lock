@@ -146,7 +146,7 @@ packages:
     source: hosted
     version: "1.16.0"
   crypto:
-    dependency: transitive
+    dependency: "direct main"
     description:
       name: crypto
       sha256: e3626ae6270383c9e3a549f34c9e4cd26c09ae6a9adaab2bf4737a00340efdc4
@@ -420,10 +420,9 @@ packages:
   stealth_enum:
     dependency: "direct main"
     description:
-      name: stealth_enum
-      sha256: fb03b6747a542f81260bbc47690f2f1a5b3a951365e9cec8d4832272d89cd830
-      url: "https://pub.dev"
-    source: hosted
+      path: "../stealth_enum"
+      relative: true
+    source: path
     version: "2.1.0"
   stream_channel:
     dependency: transitive

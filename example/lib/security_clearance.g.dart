@@ -7,10 +7,10 @@ part of 'security_clearance.dart';
 // **************************************************************************
 
 extension type const SecurityClearance._(int rawValue) {
-  static const SecurityClearance guest = SecurityClearance._(0x15ACBCE3);
-  static const SecurityClearance operator = SecurityClearance._(0x502489ED);
-  static const SecurityClearance admin = SecurityClearance._(0x1F385104);
-  static const SecurityClearance superAdmin = SecurityClearance._(0x181FC89B);
+  static const SecurityClearance guest = SecurityClearance._(0x5B7DA15D);
+  static const SecurityClearance operator = SecurityClearance._(0x44EE678C);
+  static const SecurityClearance admin = SecurityClearance._(0x18C38206);
+  static const SecurityClearance superAdmin = SecurityClearance._(0x59EA165F);
 
   /// Creates a [SecurityClearance] instance from [rawValue] at runtime.
   const factory SecurityClearance.fromRawValue(int rawValue) =
@@ -22,69 +22,72 @@ extension type const SecurityClearance._(int rawValue) {
   /// databases) to prevent runtime exceptions.
   static SecurityClearance? tryFromRawValue(int rawValue) {
     return switch (rawValue) {
-      0x15ACBCE3 => guest,
-      0x502489ED => operator,
-      0x1F385104 => admin,
-      0x181FC89B => superAdmin,
+      0x5B7DA15D => guest,
+      0x44EE678C => operator,
+      0x18C38206 => admin,
+      0x59EA165F => superAdmin,
       _ => null,
     };
   }
 
-  static const List<SecurityClearance> values = <SecurityClearance>[
+  /// Returns `true` if this instance represents a valid, recognized constant.
+  bool get isValid => tryFromRawValue(rawValue) != null;
+
+  /// Serializes this [SecurityClearance] to its integer [rawValue].
+  ///
+  /// Integer serialization leaks zero string identifiers into compiled AOT binaries.
+  int toJson() => rawValue;
+
+  /// Deserializes an integer [rawValue] into a [SecurityClearance], returning `null` on unknown value.
+  static SecurityClearance? fromJson(int rawValue) => tryFromRawValue(rawValue);
+
+  /// All recognized constants of [SecurityClearance].
+  static const List<SecurityClearance> values = [
     guest,
     operator,
     admin,
     superAdmin,
   ];
 
-  /// Whether this instance holds a recognized constant value.
-  bool get isValid => SecurityClearance.values.contains(this);
-
-  /// Serializes this [SecurityClearance] to its raw integer value for JSON/storage.
+  /// Exhaustive pattern matching across all variants.
   ///
-  /// Operates entirely on raw integers with zero string overhead in compiled binaries.
-  int toJson() => rawValue;
-
-  /// Deserializes a [SecurityClearance] from a raw JSON integer.
-  ///
-  /// Returns `null` if [rawValue] does not match any recognized variant.
-  static SecurityClearance? fromJson(int rawValue) => tryFromRawValue(rawValue);
-
-  /// Exhaustive compile-time condition flow.
-  ///
-  /// Every case must be handled — adding a new value to the source enum
-  /// breaks compilation here until handled. Inlined by AOT into raw integer
-  /// comparisons; the method itself is stripped from the binary.
+  /// Marked with `@pragma('vm:prefer-inline')` to inline
+  /// branch dispatch directly at the call site, eliminating helper
+  /// symbols from the compiled binary symbol table.
   @pragma('vm:prefer-inline')
-  T when<T>({
-    required T Function() guest,
-    required T Function() operator,
-    required T Function() admin,
-    required T Function() superAdmin,
+  R when<R>({
+    required R Function() guest,
+    required R Function() operator,
+    required R Function() admin,
+    required R Function() superAdmin,
   }) {
     return switch (rawValue) {
-      0x15ACBCE3 => guest(),
-      0x502489ED => operator(),
-      0x1F385104 => admin(),
-      0x181FC89B => superAdmin(),
+      0x5B7DA15D => guest(),
+      0x44EE678C => operator(),
+      0x18C38206 => admin(),
+      0x59EA165F => superAdmin(),
       _ => throw StateError(''),
     };
   }
 
-  /// Partial condition flow with required [orElse] fallback.
+  /// Partial pattern matching with a required [orElse] fallback.
+  ///
+  /// Marked with `@pragma('vm:prefer-inline')` to inline
+  /// branch dispatch directly at the call site, eliminating helper
+  /// symbols from the compiled binary symbol table.
   @pragma('vm:prefer-inline')
-  T maybeWhen<T>({
-    T Function()? guest,
-    T Function()? operator,
-    T Function()? admin,
-    T Function()? superAdmin,
-    required T Function() orElse,
+  R maybeWhen<R>({
+    R Function()? guest,
+    R Function()? operator,
+    R Function()? admin,
+    R Function()? superAdmin,
+    required R Function() orElse,
   }) {
     return switch (rawValue) {
-      0x15ACBCE3 when guest != null => guest(),
-      0x502489ED when operator != null => operator(),
-      0x1F385104 when admin != null => admin(),
-      0x181FC89B when superAdmin != null => superAdmin(),
+      0x5B7DA15D when guest != null => guest(),
+      0x44EE678C when operator != null => operator(),
+      0x18C38206 when admin != null => admin(),
+      0x59EA165F when superAdmin != null => superAdmin(),
       _ => orElse(),
     };
   }

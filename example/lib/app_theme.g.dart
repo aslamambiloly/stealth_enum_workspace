@@ -7,9 +7,9 @@ part of 'app_theme.dart';
 // **************************************************************************
 
 extension type const AppTheme._(int rawValue) {
-  static const AppTheme light = AppTheme._(0x50D0DC69);
-  static const AppTheme dark = AppTheme._(0x6C3AAB03);
-  static const AppTheme system = AppTheme._(0x7B53C8DA);
+  static const AppTheme light = AppTheme._(0x2A2A80DD);
+  static const AppTheme dark = AppTheme._(0x1017DFC2);
+  static const AppTheme system = AppTheme._(0x4D227268);
 
   /// Creates a [AppTheme] instance from [rawValue] at runtime.
   const factory AppTheme.fromRawValue(int rawValue) = AppTheme._;
@@ -20,94 +20,94 @@ extension type const AppTheme._(int rawValue) {
   /// databases) to prevent runtime exceptions.
   static AppTheme? tryFromRawValue(int rawValue) {
     return switch (rawValue) {
-      0x50D0DC69 => light,
-      0x6C3AAB03 => dark,
-      0x7B53C8DA => system,
+      0x2A2A80DD => light,
+      0x1017DFC2 => dark,
+      0x4D227268 => system,
       _ => null,
     };
   }
 
-  static const List<AppTheme> values = <AppTheme>[
+  /// Returns `true` if this instance represents a valid, recognized constant.
+  bool get isValid => tryFromRawValue(rawValue) != null;
+
+  /// Serializes this [AppTheme] to its integer [rawValue].
+  ///
+  /// Integer serialization leaks zero string identifiers into compiled AOT binaries.
+  int toJson() => rawValue;
+
+  /// Deserializes an integer [rawValue] into a [AppTheme], returning `null` on unknown value.
+  static AppTheme? fromJson(int rawValue) => tryFromRawValue(rawValue);
+
+  /// All recognized constants of [AppTheme].
+  static const List<AppTheme> values = [
     light,
     dark,
     system,
   ];
 
-  /// Whether this instance holds a recognized constant value.
-  bool get isValid => AppTheme.values.contains(this);
-
-  /// Serializes this [AppTheme] to its raw integer value for JSON/storage.
-  ///
-  /// Operates entirely on raw integers with zero string overhead in compiled binaries.
-  int toJson() => rawValue;
-
-  /// Deserializes a [AppTheme] from a raw JSON integer.
-  ///
-  /// Returns `null` if [rawValue] does not match any recognized variant.
-  static AppTheme? fromJson(int rawValue) => tryFromRawValue(rawValue);
-
-  // ── Label helpers (generateLabel: true) ─────────────────────────
+  // ─────────────────────────────────────────────────────────────────────────
+  // Label Ergonomics (generateLabel: true)
   //
-  // NOTE: These helpers emit plain-text string literals into the compiled
-  // binary. The private source enum strings are fully erased, but these
-  // generated labels re-introduce readable names. Use only when you need
-  // display labels or logging and you understand the security trade-off.
+  // [SECURITY WARNING]
+  // These helpers emit human-readable string literals into the generated file.
+  // These strings WILL be retained in the compiled AOT binary (libapp.so).
+  // ─────────────────────────────────────────────────────────────────────────
 
-  /// The human-readable label for this variant (e.g. `'admin'`).
+  /// Returns the original enum constant name as a string (equivalent to `enum.name`).
   ///
-  /// Equivalent to `.name` on a standard Dart `enum`.
-  /// **Note**: This string will be present in AOT binaries (see `generateLabel`).
-  String get label => switch (rawValue) {
-        0x50D0DC69 => 'light',
-        0x6C3AAB03 => 'dark',
-        0x7B53C8DA => 'system',
-        _ => 'unknown($rawValue)',
+  /// **Note**: This emits plain-text string literals into the compiled binary.
+  String get label => switch (this) {
+        light => 'light',
+        dark => 'dark',
+        system => 'system',
+        _ => 'unknown',
       };
 
-  /// Looks up a [AppTheme] variant by its [label] string.
+  /// Looks up a [AppTheme] by its [label] string (equivalent to `values.byName`).
   ///
-  /// Returns `null` if [label] does not match any known variant.
-  /// Equivalent to `AppTheme.byName(label)` on a standard `enum`.
-  static AppTheme? byLabel(String label) {
-    return switch (label) {
-      'light' => light,
-      'dark' => dark,
-      'system' => system,
-      _ => null,
-    };
-  }
+  /// Returns `null` if no variant matches the given label.
+  static AppTheme? byLabel(String label) => switch (label) {
+        'light' => light,
+        'dark' => dark,
+        'system' => system,
+        _ => null,
+      };
 
-  /// Exhaustive compile-time condition flow.
+  /// Exhaustive pattern matching across all variants.
   ///
-  /// Every case must be handled — adding a new value to the source enum
-  /// breaks compilation here until handled. Inlined by AOT into raw integer
-  /// comparisons; the method itself is stripped from the binary.
+  /// Marked with `@pragma('vm:prefer-inline')` to inline
+  /// branch dispatch directly at the call site, eliminating helper
+  /// symbols from the compiled binary symbol table.
   @pragma('vm:prefer-inline')
-  T when<T>({
-    required T Function() light,
-    required T Function() dark,
-    required T Function() system,
+  R when<R>({
+    required R Function() light,
+    required R Function() dark,
+    required R Function() system,
   }) {
     return switch (rawValue) {
-      0x50D0DC69 => light(),
-      0x6C3AAB03 => dark(),
-      0x7B53C8DA => system(),
+      0x2A2A80DD => light(),
+      0x1017DFC2 => dark(),
+      0x4D227268 => system(),
       _ => throw StateError(''),
     };
   }
 
-  /// Partial condition flow with required [orElse] fallback.
+  /// Partial pattern matching with a required [orElse] fallback.
+  ///
+  /// Marked with `@pragma('vm:prefer-inline')` to inline
+  /// branch dispatch directly at the call site, eliminating helper
+  /// symbols from the compiled binary symbol table.
   @pragma('vm:prefer-inline')
-  T maybeWhen<T>({
-    T Function()? light,
-    T Function()? dark,
-    T Function()? system,
-    required T Function() orElse,
+  R maybeWhen<R>({
+    R Function()? light,
+    R Function()? dark,
+    R Function()? system,
+    required R Function() orElse,
   }) {
     return switch (rawValue) {
-      0x50D0DC69 when light != null => light(),
-      0x6C3AAB03 when dark != null => dark(),
-      0x7B53C8DA when system != null => system(),
+      0x2A2A80DD when light != null => light(),
+      0x1017DFC2 when dark != null => dark(),
+      0x4D227268 when system != null => system(),
       _ => orElse(),
     };
   }

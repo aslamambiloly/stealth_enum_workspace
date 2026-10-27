@@ -1,5 +1,6 @@
 import 'package:build/build.dart';
 import 'package:build_test/build_test.dart';
+import 'package:logging/logging.dart';
 import 'package:stealth_enum_generator/src/builder.dart';
 import 'package:stealth_enum_generator/src/stealth_enum_generator.dart';
 import 'package:test/test.dart';
@@ -9,12 +10,14 @@ library stealth_enum;
 
 class StealthEnum {
   final int? seed;
+  final String? key;
   final bool generateWhen;
   final String? name;
   final bool generateLabel;
 
   const StealthEnum({
     this.seed,
+    this.key,
     this.generateWhen = true,
     this.name,
     this.generateLabel = false,
@@ -71,14 +74,15 @@ enum _UserRole { guest, member, admin }
               contains('static const UserRole member = UserRole._('),
               contains('static const UserRole admin = UserRole._('),
               contains('static UserRole? tryFromRawValue(int rawValue) {'),
-              contains('bool get isValid => UserRole.values.contains(this);'),
+              contains(
+                  'bool get isValid => tryFromRawValue(rawValue) != null;'),
               // toJson / fromJson always emitted
               contains('int toJson() => rawValue;'),
               contains(
                   'static UserRole? fromJson(int rawValue) => tryFromRawValue(rawValue);'),
               // Exhaustive pattern matching with fail-closed StateError
-              contains('T when<T>({'),
-              contains('T maybeWhen<T>({'),
+              contains('R when<R>({'),
+              contains('R maybeWhen<R>({'),
               contains("_ => throw StateError(''),"),
               // Must NOT contain string labels when generateLabel is false
               isNot(contains('String get label')),
@@ -106,15 +110,16 @@ enum _AppTheme { light, dark, system }
           'a|lib/theme.stealth_enum.g.part': decodedMatches(
             allOf([
               contains('extension type const AppTheme._(int rawValue) {'),
-              contains('String get label => switch (rawValue) {'),
-              contains("=> 'light',"),
-              contains("=> 'dark',"),
-              contains("=> 'system',"),
-              contains('static AppTheme? byLabel(String label) {'),
+              contains('String get label => switch (this) {'),
+              contains("light => 'light',"),
+              contains("dark => 'dark',"),
+              contains("system => 'system',"),
+              contains(
+                  'static AppTheme? byLabel(String label) => switch (label) {'),
               contains("'light' => light,"),
               contains("'dark' => dark,"),
               contains("'system' => system,"),
-              // toJson and fromJson are also present
+              // toJson/fromJson still operate on ints
               contains('int toJson() => rawValue;'),
               contains(
                   'static AppTheme? fromJson(int rawValue) => tryFromRawValue(rawValue);'),
@@ -128,29 +133,57 @@ enum _AppTheme { light, dark, system }
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
-          'a|lib/tier.dart': '''
+          'a|lib/payment.dart': '''
 import 'package:stealth_enum/stealth_enum.dart';
 
-part 'tier.g.dart';
+part 'payment.g.dart';
 
 @StealthEnum()
-enum _SubscriptionTier {
+enum _PaymentGateway {
   @StealthValue(0x10000001)
-  free,
+  stripe,
   @StealthValue(0x7F000002)
-  premium,
+  applePay,
+  googlePay,
 }
 ''',
         }),
         outputs: {
-          'a|lib/tier.stealth_enum.g.part': decodedMatches(
+          'a|lib/payment.stealth_enum.g.part': decodedMatches(
             allOf([
               contains(
-                  'static const SubscriptionTier free = SubscriptionTier._(0x10000001);'),
+                  'static const PaymentGateway stripe = PaymentGateway._(0x10000001);'),
               contains(
-                  'static const SubscriptionTier premium = SubscriptionTier._(0x7F000002);'),
-              contains('0x10000001 => free,'),
-              contains('0x7F000002 => premium,'),
+                  'static const PaymentGateway applePay = PaymentGateway._(0x7F000002);'),
+              // googlePay derives its value automatically
+              contains('static const PaymentGateway googlePay = PaymentGateway._('),
+            ]),
+          ),
+        },
+      );
+    });
+
+    test('custom key parameter derives valid deterministic constants',
+        () async {
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/keyed.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'keyed.g.dart';
+
+@StealthEnum(key: 'my_project_secret_salt_1234')
+enum _KeyedStatus { pending, approved, rejected }
+''',
+        }),
+        outputs: {
+          'a|lib/keyed.stealth_enum.g.part': decodedMatches(
+            allOf([
+              contains('extension type const KeyedStatus._(int rawValue) {'),
+              contains('static const KeyedStatus pending = KeyedStatus._('),
+              contains('static const KeyedStatus approved = KeyedStatus._('),
+              contains('static const KeyedStatus rejected = KeyedStatus._('),
             ]),
           ),
         },
@@ -162,22 +195,21 @@ enum _SubscriptionTier {
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
-          'a|lib/flag.dart': '''
+          'a|lib/simple.dart': '''
 import 'package:stealth_enum/stealth_enum.dart';
 
-part 'flag.g.dart';
+part 'simple.g.dart';
 
 @StealthEnum(generateWhen: false)
-enum _FeatureFlag { enabled, disabled }
+enum _SimpleMode { on, off }
 ''',
         }),
         outputs: {
-          'a|lib/flag.stealth_enum.g.part': decodedMatches(
+          'a|lib/simple.stealth_enum.g.part': decodedMatches(
             allOf([
-              contains('extension type const FeatureFlag._(int rawValue) {'),
-              contains('int toJson() => rawValue;'),
-              isNot(contains('T when<T>({')),
-              isNot(contains('T maybeWhen<T>({')),
+              contains('extension type const SimpleMode._(int rawValue) {'),
+              isNot(contains('when<')),
+              isNot(contains('maybeWhen<')),
             ]),
           ),
         },
@@ -188,21 +220,21 @@ enum _FeatureFlag { enabled, disabled }
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
-          'a|lib/role.dart': '''
+          'a|lib/custom_name.dart': '''
 import 'package:stealth_enum/stealth_enum.dart';
 
-part 'role.g.dart';
+part 'custom_name.g.dart';
 
-@StealthEnum(name: 'PublicUserRole')
-enum _Role { guest, admin }
+@StealthEnum(name: 'RenamedClearance')
+enum _InternalClearance { low, high }
 ''',
         }),
         outputs: {
-          'a|lib/role.stealth_enum.g.part': decodedMatches(
+          'a|lib/custom_name.stealth_enum.g.part': decodedMatches(
             allOf([
-              contains('extension type const PublicUserRole._(int rawValue) {'),
-              contains('static const PublicUserRole guest = PublicUserRole._('),
-              contains('static const PublicUserRole admin = PublicUserRole._('),
+              contains('extension type const RenamedClearance._(int rawValue) {'),
+              contains('static const RenamedClearance low = RenamedClearance._('),
+              contains('static const RenamedClearance high = RenamedClearance._('),
             ]),
           ),
         },
@@ -210,63 +242,63 @@ enum _Role { guest, admin }
     });
 
     test(
-        'per-constant FNV-1a stability: inserting a constant does NOT shift other values',
+        'per-constant HMAC-SHA256 stability: inserting a constant does NOT shift other values',
         () async {
       String? originalGuestHex;
       String? originalAdminHex;
 
-      // 1. Initial enum: guest, admin
+      // First run: 2 constants
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
-          'a|lib/role.dart': '''
+          'a|lib/stable.dart': '''
 import 'package:stealth_enum/stealth_enum.dart';
 
-part 'role.g.dart';
+part 'stable.g.dart';
 
 @StealthEnum()
 enum _UserRole { guest, admin }
 ''',
         }),
         outputs: {
-          'a|lib/role.stealth_enum.g.part':
-              decodedMatches(predicate<String>((content) {
+          'a|lib/stable.stealth_enum.g.part': decodedMatches(
+              predicate<String>((content) {
             final guestMatch =
-                RegExp(r'guest = UserRole\._\((0x[0-9A-Fa-f]+)\)')
+                RegExp(r'static const UserRole guest = UserRole\._\((0x[0-9A-Fa-f]+)\);')
                     .firstMatch(content);
             final adminMatch =
-                RegExp(r'admin = UserRole\._\((0x[0-9A-Fa-f]+)\)')
+                RegExp(r'static const UserRole admin = UserRole\._\((0x[0-9A-Fa-f]+)\);')
                     .firstMatch(content);
-            originalGuestHex = guestMatch?.group(1);
-            originalAdminHex = adminMatch?.group(1);
-            expect(originalGuestHex, isNotNull);
-            expect(originalAdminHex, isNotNull);
+            expect(guestMatch, isNotNull);
+            expect(adminMatch, isNotNull);
+            originalGuestHex = guestMatch!.group(1);
+            originalAdminHex = adminMatch!.group(1);
             return true;
           })),
         },
       );
 
-      // 2. Modified enum: inserted 'moderator' in between guest and admin
+      // Second run: insert 'moderator' between guest and admin
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
-          'a|lib/role.dart': '''
+          'a|lib/stable.dart': '''
 import 'package:stealth_enum/stealth_enum.dart';
 
-part 'role.g.dart';
+part 'stable.g.dart';
 
 @StealthEnum()
 enum _UserRole { guest, moderator, admin }
 ''',
         }),
         outputs: {
-          'a|lib/role.stealth_enum.g.part':
-              decodedMatches(predicate<String>((content) {
+          'a|lib/stable.stealth_enum.g.part': decodedMatches(
+              predicate<String>((content) {
             final guestMatch =
-                RegExp(r'guest = UserRole\._\((0x[0-9A-Fa-f]+)\)')
+                RegExp(r'static const UserRole guest = UserRole\._\((0x[0-9A-Fa-f]+)\);')
                     .firstMatch(content);
             final adminMatch =
-                RegExp(r'admin = UserRole\._\((0x[0-9A-Fa-f]+)\)')
+                RegExp(r'static const UserRole admin = UserRole\._\((0x[0-9A-Fa-f]+)\);')
                     .firstMatch(content);
             // Must match original values exactly!
             expect(guestMatch?.group(1), equals(originalGuestHex),
@@ -283,7 +315,9 @@ enum _UserRole { guest, moderator, admin }
   });
 
   group('StealthEnumGenerator validation errors', () {
-    test('logs error when applied to a non-enum declaration', () async {
+    test('logs error with exact message when applied to a non-enum declaration',
+        () async {
+      final logs = <String>[];
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
@@ -297,11 +331,42 @@ class _InvalidClass {}
 ''',
         }),
         outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains('can only be applied to an enum declaration')),
+      );
+    });
+
+    test('logs error when enum is not declared private with leading underscore',
+        () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/public_enum.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'public_enum.g.dart';
+
+@StealthEnum()
+enum PublicEnum { a, b }
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains(
+            'can only be applied to private enum declarations starting with a leading underscore')),
       );
     });
 
     test('logs error when duplicate @StealthValue is used in same enum',
         () async {
+      final logs = <String>[];
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
@@ -320,6 +385,93 @@ enum _DuplicateVal {
 ''',
         }),
         outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains('Duplicate @StealthValue(0x10000001)')),
+      );
+    });
+
+    test('logs error when @StealthValue has negative value', () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/neg.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'neg.g.dart';
+
+@StealthEnum()
+enum _NegativeVal {
+  @StealthValue(-5)
+  a,
+}
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains('Values must be positive 32-bit unsigned integers')),
+      );
+    });
+
+    test('logs error when @StealthValue has trivial sequential value (< 0x1000)',
+        () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/small.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'small.g.dart';
+
+@StealthEnum()
+enum _SmallVal {
+  @StealthValue(1)
+  a,
+}
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains(
+            'defeat reverse-engineering resistance by creating low sequential jump tables')),
+      );
+    });
+
+    test('logs error when constant collides with reserved member name',
+        () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/reserved.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'reserved.g.dart';
+
+@StealthEnum()
+enum _ReservedVal {
+  when,
+  admin,
+}
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains(
+            'collides with a generated extension type member or parameter')),
       );
     });
   });

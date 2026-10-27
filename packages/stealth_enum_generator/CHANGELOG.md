@@ -1,3 +1,13 @@
+## 2.2.0
+
+### Security & Hardening
+* Hashing upgraded from linear FNV-1a to **keyed HMAC-SHA256**: eliminates XOR differential attacks (`valA ^ valB` no longer cancels the key or enum name).
+* Added support for `key: String?` parameter in `@StealthEnum(key: '...')`.
+* Enforced private enum declarations: generates a descriptive `InvalidGenerationSourceError` if `@StealthEnum` is placed on a public enum without a leading underscore (`_`).
+* Added keyword reservation check: throws a compile-time error if an enum constant collides with a generated extension type member (`when`, `orElse`, `isValid`, etc.).
+* Added strict range validation to `@StealthValue`: throws a compile-time error on negative integers or values below `0x1000`.
+* 15 comprehensive unit tests verifying code emission and non-vacuous validation error logging.
+
 ## 2.1.0
 
 ### New Features & Improvements

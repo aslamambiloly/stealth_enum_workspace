@@ -27,35 +27,34 @@ extension type const PaymentGateway._(int rawValue) {
     };
   }
 
-  static const List<PaymentGateway> values = <PaymentGateway>[
+  /// Returns `true` if this instance represents a valid, recognized constant.
+  bool get isValid => tryFromRawValue(rawValue) != null;
+
+  /// Serializes this [PaymentGateway] to its integer [rawValue].
+  ///
+  /// Integer serialization leaks zero string identifiers into compiled AOT binaries.
+  int toJson() => rawValue;
+
+  /// Deserializes an integer [rawValue] into a [PaymentGateway], returning `null` on unknown value.
+  static PaymentGateway? fromJson(int rawValue) => tryFromRawValue(rawValue);
+
+  /// All recognized constants of [PaymentGateway].
+  static const List<PaymentGateway> values = [
     stripe,
     applePay,
     googlePay,
   ];
 
-  /// Whether this instance holds a recognized constant value.
-  bool get isValid => PaymentGateway.values.contains(this);
-
-  /// Serializes this [PaymentGateway] to its raw integer value for JSON/storage.
+  /// Exhaustive pattern matching across all variants.
   ///
-  /// Operates entirely on raw integers with zero string overhead in compiled binaries.
-  int toJson() => rawValue;
-
-  /// Deserializes a [PaymentGateway] from a raw JSON integer.
-  ///
-  /// Returns `null` if [rawValue] does not match any recognized variant.
-  static PaymentGateway? fromJson(int rawValue) => tryFromRawValue(rawValue);
-
-  /// Exhaustive compile-time condition flow.
-  ///
-  /// Every case must be handled — adding a new value to the source enum
-  /// breaks compilation here until handled. Inlined by AOT into raw integer
-  /// comparisons; the method itself is stripped from the binary.
+  /// Marked with `@pragma('vm:prefer-inline')` to inline
+  /// branch dispatch directly at the call site, eliminating helper
+  /// symbols from the compiled binary symbol table.
   @pragma('vm:prefer-inline')
-  T when<T>({
-    required T Function() stripe,
-    required T Function() applePay,
-    required T Function() googlePay,
+  R when<R>({
+    required R Function() stripe,
+    required R Function() applePay,
+    required R Function() googlePay,
   }) {
     return switch (rawValue) {
       0x10000001 => stripe(),
@@ -65,13 +64,17 @@ extension type const PaymentGateway._(int rawValue) {
     };
   }
 
-  /// Partial condition flow with required [orElse] fallback.
+  /// Partial pattern matching with a required [orElse] fallback.
+  ///
+  /// Marked with `@pragma('vm:prefer-inline')` to inline
+  /// branch dispatch directly at the call site, eliminating helper
+  /// symbols from the compiled binary symbol table.
   @pragma('vm:prefer-inline')
-  T maybeWhen<T>({
-    T Function()? stripe,
-    T Function()? applePay,
-    T Function()? googlePay,
-    required T Function() orElse,
+  R maybeWhen<R>({
+    R Function()? stripe,
+    R Function()? applePay,
+    R Function()? googlePay,
+    required R Function() orElse,
   }) {
     return switch (rawValue) {
       0x10000001 when stripe != null => stripe(),
