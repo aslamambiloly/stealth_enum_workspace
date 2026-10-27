@@ -142,6 +142,20 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     buf.writeln('  /// Creates a [$publicName] instance from [rawValue] at runtime.');
     buf.writeln('  const factory $publicName.fromRawValue(int rawValue) = $publicName._;');
     buf.writeln();
+    buf.writeln('  /// Safely parses [rawValue] into a [$publicName], returning `null` if unknown.');
+    buf.writeln('  ///');
+    buf.writeln('  /// Use this when parsing untrusted external inputs (API responses, JSON,');
+    buf.writeln('  /// databases) to prevent runtime exceptions.');
+    buf.writeln('  static $publicName? tryFromRawValue(int rawValue) {');
+    buf.writeln('    return switch (rawValue) {');
+    for (final name in fieldNames) {
+      final hex = '0x${valueMap[name]!.toRadixString(16).toUpperCase()}';
+      buf.writeln('      $hex => $name,');
+    }
+    buf.writeln('      _ => null,');
+    buf.writeln('    };');
+    buf.writeln('  }');
+    buf.writeln();
 
     // values list
     buf.writeln('  static const List<$publicName> values = <$publicName>[');
@@ -149,6 +163,11 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
       buf.writeln('    $name,');
     }
     buf.writeln('  ];');
+    buf.writeln();
+
+    // isValid getter
+    buf.writeln('  /// Whether this instance holds a recognized constant value.');
+    buf.writeln('  bool get isValid => $publicName.values.contains(this);');
 
     if (generateWhen) {
       buf.writeln();

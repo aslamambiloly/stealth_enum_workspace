@@ -1,3 +1,9 @@
+## 1.0.5
+
+* Added `tryFromRawValue()` for safe, null-returning parsing of untrusted inputs (APIs, JSON, databases) to prevent runtime crashes.
+* Added `isValid` boolean getter to verify if an instance holds a recognized enum variant.
+* Documented compile-time and runtime safety guarantees in README and llms.txt.
+
 ## 1.0.4
 
 * Hardened generated pattern matching: all cases are now explicit and wildcard branches fail closed.

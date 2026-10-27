@@ -1,3 +1,9 @@
+## 1.0.5
+
+* Added `tryFromRawValue()` generation for safe, null-returning integer parsing.
+* Added `isValid` boolean getter generation for variant validation.
+* 100% test coverage maintained.
+
 ## 1.0.4
 
 * Security hardening: `.when()` now generates explicit hex conditions for every enum constant.

@@ -85,6 +85,7 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
   - [3. Use the generated extension type](#3-use-the-generated-extension-type)
   - [Custom seed for deterministic builds](#custom-seed-for-deterministic-builds)
   - [Custom type name](#custom-type-name)
+  - [Safe Parsing & Zero-Crash Architecture](#safe-parsing--zero-crash-architecture)
 - [Generated Output](#generated-output)
 - [API Reference](#api-reference)
   - [`@StealthEnum`](#stealthenum)
@@ -248,6 +249,44 @@ enum _RoleInternal {
 }
 ```
 
+### Safe Parsing & Zero-Crash Architecture
+
+`stealth_enum` provides comprehensive compile-time (AOT) and runtime safety guarantees so your app remains resilient:
+
+#### 1. Compile-Time Exhaustiveness (AOT Safety)
+Every branch in `.when()` is marked `required`. If you add a new constant to your private enum, Dart's type checker refuses to compile your app until you handle it. It is impossible to forget a case at compile time.
+
+#### 2. Safe Parsing from Untrusted Inputs (`tryFromRawValue`)
+When reading integer values from network APIs, JSON, databases, or local storage, use `tryFromRawValue()` to prevent unexpected runtime errors:
+
+```dart
+// Safely parses raw integers, returning null if unknown (zero crashes!):
+final role = SecurityClearance.tryFromRawValue(json['clearance']) ?? SecurityClearance.guest;
+```
+
+#### 3. Graceful Fallbacks (`maybeWhen`)
+For partial matching with a guaranteed safe fallback, use `.maybeWhen()`:
+
+```dart
+role.maybeWhen(
+  admin: () => unlockAdminPanel(),
+  superAdmin: () => unlockFullAccess(),
+  orElse: () => showDefaultView(), // Executed for any other or unknown value
+);
+```
+
+#### 4. Instance Validation (`isValid`)
+Easily verify whether an instance holds a recognized enum constant:
+
+```dart
+if (role.isValid) {
+  // Safe to proceed
+}
+```
+
+#### 5. Fail-Closed Security
+If an invalid raw integer reaches `.when()`, it fails closed by throwing `StateError('')` rather than accidentally granting unauthorized privileges to the last branch.
+
 ## Generated Output
 
 Here is what `stealth_enum_generator` produces in `security_clearance.g.dart`:
@@ -270,12 +309,24 @@ extension type const SecurityClearance._(int rawValue) {
   const factory SecurityClearance.fromRawValue(int rawValue) =
       SecurityClearance._;
 
+  static SecurityClearance? tryFromRawValue(int rawValue) {
+    return switch (rawValue) {
+      0x373D1B37 => guest,
+      0x764AE932 => operator,
+      0x7C06254C => admin,
+      0x3154C03F => superAdmin,
+      _ => null,
+    };
+  }
+
   static const List<SecurityClearance> values = <SecurityClearance>[
     guest,
     operator,
     admin,
     superAdmin,
   ];
+
+  bool get isValid => SecurityClearance.values.contains(this);
 
   @pragma('vm:prefer-inline')
   T when<T>({
@@ -328,7 +379,10 @@ extension type const SecurityClearance._(int rawValue) {
 |---|---|---|
 | `rawValue` | `int` | The underlying 32-bit obfuscated integer value. |
 | `values` | `List<T>` | List of all enum variants in declaration order. |
-| `when<T>(...)` | `T Function(...)` | Inlined exhaustive pattern matching covering all variants. |
+| `fromRawValue(int)` | `const factory` | Creates an extension type instance from a raw integer value. |
+| `tryFromRawValue(int)` | `static T?` | Safely parses a raw integer, returning `null` if unknown (zero crashes). |
+| `isValid` | `bool` | Returns `true` if this instance holds a recognized enum variant. |
+| `when<T>(...)` | `T Function(...)` | Inlined exhaustive pattern matching covering all variants. Fails closed. |
 | `maybeWhen<T>(...)` | `T Function(...)` | Inlined non-exhaustive pattern matching with a required `orElse` fallback. |
 
 ## Under the Hood
@@ -336,7 +390,7 @@ extension type const SecurityClearance._(int rawValue) {
 - **Pure Extension Type:** Dart 3.3 introduced `extension type`, which compiles down directly to the underlying representation type (`int`). At runtime, it lives in a CPU register with zero heap allocation and zero pointer indirection.
 - **Tree-Shaking:** Because the source enum `_SecurityClearance` is private to the file and never instantiated, the Dart AOT compiler completely removes the original enum declaration, its string names, and metadata from the compiled binary.
 - **Decompiler Neutralization:** Conventional decompilers (Blutter, Ghidra) look for string tables and incremental switch jump tables (`0, 1, 2, ...`). With `stealth_enum`, they see isolated integer comparisons (`CMP W0, #0x7C06254C`) scattered across inlined call sites.
-- **Wildcard Fallback (No String Leaks):** Standard Dart switch statements may generate exception stubs referencing unhandled cases. `stealth_enum` maps the final case of `.when()` to a wildcard `_ =>`, eliminating any runtime error string.
+- **Fail-Closed Security (No String Leaks):** All cases in `.when()` match explicit hex values, and the wildcard branch `_ => throw StateError('')` fails closed on unknown or corrupted values without leaking any string literals into the binary.
 
 ## Running the example
 

@@ -16,12 +16,29 @@ extension type const SubscriptionStatus._(int rawValue) {
   const factory SubscriptionStatus.fromRawValue(int rawValue) =
       SubscriptionStatus._;
 
+  /// Safely parses [rawValue] into a [SubscriptionStatus], returning `null` if unknown.
+  ///
+  /// Use this when parsing untrusted external inputs (API responses, JSON,
+  /// databases) to prevent runtime exceptions.
+  static SubscriptionStatus? tryFromRawValue(int rawValue) {
+    return switch (rawValue) {
+      0x4C9A8C34 => trial,
+      0x2F31E5AE => active,
+      0x414FE989 => expired,
+      0x25D2B67F => cancelled,
+      _ => null,
+    };
+  }
+
   static const List<SubscriptionStatus> values = <SubscriptionStatus>[
     trial,
     active,
     expired,
     cancelled,
   ];
+
+  /// Whether this instance holds a recognized constant value.
+  bool get isValid => SubscriptionStatus.values.contains(this);
 
   /// Exhaustive compile-time condition flow.
   ///

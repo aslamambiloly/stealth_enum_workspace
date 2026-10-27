@@ -23,6 +23,21 @@ void main() {
       );
     });
 
+    test('tryFromRawValue parses known values and returns null on unknown', () {
+      for (final v in SecurityClearance.values) {
+        expect(SecurityClearance.tryFromRawValue(v.rawValue), equals(v));
+      }
+      expect(SecurityClearance.tryFromRawValue(0x12345678), isNull);
+    });
+
+    test('isValid returns true for valid constants and false for invalid rawValue', () {
+      for (final v in SecurityClearance.values) {
+        expect(v.isValid, isTrue);
+      }
+      final invalid = SecurityClearance.fromRawValue(0x12345678);
+      expect(invalid.isValid, isFalse);
+    });
+
     test('inequality — different constants are not equal', () {
       expect(SecurityClearance.admin, isNot(equals(SecurityClearance.guest)));
       expect(
@@ -194,6 +209,21 @@ void main() {
         SubscriptionStatus.fromRawValue(SubscriptionStatus.trial.rawValue),
         equals(SubscriptionStatus.trial),
       );
+    });
+
+    test('tryFromRawValue parses known values and returns null on unknown', () {
+      for (final v in SubscriptionStatus.values) {
+        expect(SubscriptionStatus.tryFromRawValue(v.rawValue), equals(v));
+      }
+      expect(SubscriptionStatus.tryFromRawValue(0x99999999), isNull);
+    });
+
+    test('isValid returns true for valid constants and false for invalid rawValue', () {
+      for (final v in SubscriptionStatus.values) {
+        expect(v.isValid, isTrue);
+      }
+      final invalid = SubscriptionStatus.fromRawValue(0x99999999);
+      expect(invalid.isValid, isFalse);
     });
   });
 }

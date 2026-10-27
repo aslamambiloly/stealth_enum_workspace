@@ -45,8 +45,8 @@ flutter pub get
 1. **Validation**: Inspects `@StealthEnum()` annotations and ensures they are applied to private `EnumElement` declarations.
 2. **Identifier Extraction**: Resolves the public type name (strips the leading `_` or applies the custom `name:` override).
 3. **Entropy & Value Generation**: Computes collision-free, deterministic 32-bit hex values for each constant using a seeded random distribution.
-4. **Extension Type Synthesis**: Emits an `extension type const <Name>._(int rawValue)` with static constants, `values` list, and fully inlined `.when()` / `.maybeWhen()` pattern matching methods.
-5. **String Sanitization**: Generates wildcard fallbacks (`_ =>`) to ensure no exception strings or class names leak into the compiled AOT binary.
+4. **Extension Type Synthesis**: Emits an `extension type const <Name>._(int rawValue)` with static constants, `values` list, safe `tryFromRawValue()` parsing, `isValid` validation, and inlined pattern matching.
+5. **Fail-Closed Security**: Emits explicit hex cases and fail-closed wildcards (`_ => throw StateError('')`) to guarantee that corrupted or unknown values never execute a privileged branch without leaking strings.
 6. **Shared Pipeline Integration**: Built with `SharedPartBuilder` so it seamlessly shares `.g.dart` files with `json_serializable`, `freezed`, and other generators.
 
 For full documentation and examples, see the [stealth_enum README](https://pub.dev/packages/stealth_enum).

@@ -16,12 +16,29 @@ extension type const SecurityClearance._(int rawValue) {
   const factory SecurityClearance.fromRawValue(int rawValue) =
       SecurityClearance._;
 
+  /// Safely parses [rawValue] into a [SecurityClearance], returning `null` if unknown.
+  ///
+  /// Use this when parsing untrusted external inputs (API responses, JSON,
+  /// databases) to prevent runtime exceptions.
+  static SecurityClearance? tryFromRawValue(int rawValue) {
+    return switch (rawValue) {
+      0x373D1B37 => guest,
+      0x764AE932 => operator,
+      0x7C06254C => admin,
+      0x3154C03F => superAdmin,
+      _ => null,
+    };
+  }
+
   static const List<SecurityClearance> values = <SecurityClearance>[
     guest,
     operator,
     admin,
     superAdmin,
   ];
+
+  /// Whether this instance holds a recognized constant value.
+  bool get isValid => SecurityClearance.values.contains(this);
 
   /// Exhaustive compile-time condition flow.
   ///
