@@ -23,11 +23,11 @@ Add `stealth_enum_generator` to your `dev_dependencies` alongside `build_runner`
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.1
+  stealth_enum: ^2.2.2
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.1
+  stealth_enum_generator: ^2.2.2
 ```
 
 Then run:
@@ -49,14 +49,19 @@ targets:
       stealth_enum_generator:stealth_enum:
         options:
           key: "YOUR_HIGH_ENTROPY_BUILD_SECRET"
+          require_key: true  # Fails build if any enum lacks a key
 ```
 
 Or pass it dynamically via the `STEALTH_ENUM_KEY` environment variable in CI:
 
 ```bash
 export STEALTH_ENUM_KEY="YOUR_HIGH_ENTROPY_BUILD_SECRET"
+export STEALTH_ENUM_REQUIRE_KEY="1"  # Guarantees CI fails if key is empty
 dart run build_runner build --delete-conflicting-outputs
 ```
+
+> [!NOTE]
+> `build_runner` does not track changes in environment variables automatically across runs. After changing or rotating keys, run `dart run build_runner clean`.
 
 ## How it works
 

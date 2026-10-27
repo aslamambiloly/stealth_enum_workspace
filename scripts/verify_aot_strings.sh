@@ -180,18 +180,25 @@ echo -e "${GREEN}[OK]${RESET} Stealth binary compiled: $(du -sh "$STEALTH_BIN" |
 echo ""
 echo -e "Scanning stealth binary for private enum identifiers..."
 
-STEALTH_STRINGS_ABSENT=(
-  "superAdmin"
-  "trial"
-  "cancelled"
-  "_SecurityClearance"
-  "_SubscriptionStatus"
-)
+# Allow user to specify custom strings to scan via STEALTH_STRINGS env var or $3 CLI arg
+if [[ -n "${STEALTH_STRINGS:-}" ]]; then
+  IFS=',' read -ra SCAN_STRINGS <<< "$STEALTH_STRINGS"
+elif [[ -n "${3:-}" ]]; then
+  IFS=',' read -ra SCAN_STRINGS <<< "$3"
+else
+  SCAN_STRINGS=(
+    "superAdmin"
+    "trial"
+    "cancelled"
+    "_SecurityClearance"
+    "_SubscriptionStatus"
+  )
+fi
 
 STEALTH_FAIL=0
 STEALTH_PASS=0
 
-for s in "${STEALTH_STRINGS_ABSENT[@]}"; do
+for s in "${SCAN_STRINGS[@]}"; do
   if scan_binary_for_string "$STEALTH_BIN" "$s"; then
     echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in stealth binary: '${BOLD}$s${RESET}'"
     STEALTH_FAIL=$((STEALTH_FAIL + 1))
@@ -214,6 +221,26 @@ if [[ "${1:-}" == "--flutter" ]]; then
       echo -e "${RED}[ERROR]${RESET} 'flutter' CLI not found in PATH."
       exit 1
     fi
+
+    # Optional control APK verification if pre-migration APK is supplied
+    CONTROL_APK="${CONTROL_APK:-}"
+    if [[ -n "$CONTROL_APK" && -f "$CONTROL_APK" ]]; then
+      echo -e "${CYAN}[INFO]${RESET} Scanning CONTROL APK to verify baseline string leakage ($CONTROL_APK)..."
+      unzip -p "$CONTROL_APK" lib/arm64-v8a/libapp.so > "$BUILD_DIR/control_libapp.so"
+      CONTROL_LEAKS=0
+      for s in "${SCAN_STRINGS[@]}"; do
+        if scan_binary_for_string "$BUILD_DIR/control_libapp.so" "$s"; then
+          echo -e "  ${YELLOW}[CONFIRMED LEAK]${RESET} String '${BOLD}$s${RESET}' FOUND in control APK"
+          CONTROL_LEAKS=$((CONTROL_LEAKS + 1))
+        fi
+      done
+      if [ "$CONTROL_LEAKS" -eq 0 ]; then
+        echo -e "  ${YELLOW}[WARN]${RESET} None of the target scan strings were found in the control APK."
+      else
+        echo -e "  ${GREEN}✓ Confirmed: Control APK leaks target strings.${RESET}"
+      fi
+    fi
+
     echo -e "${CYAN}[INFO]${RESET} Compiling release arm64 APK with obfuscation for project: $FLUTTER_PROJ"
     mkdir -p "$BUILD_DIR/flutter_symbols"
     (cd "$FLUTTER_PROJ" && flutter build apk --release --target-platform android-arm64 --obfuscate --split-debug-info="$BUILD_DIR/flutter_symbols" >/dev/null)
@@ -228,7 +255,7 @@ if [[ "${1:-}" == "--flutter" ]]; then
     unzip -p "$APK_PATH" lib/arm64-v8a/libapp.so > "$BUILD_DIR/libapp.so"
     
     echo -e "Scanning Flutter arm64 libapp.so for private enum identifiers..."
-    for s in "${STEALTH_STRINGS_ABSENT[@]}"; do
+    for s in "${SCAN_STRINGS[@]}"; do
       if scan_binary_for_string "$BUILD_DIR/libapp.so" "$s"; then
         echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in Flutter libapp.so: '${BOLD}$s${RESET}'"
         STEALTH_FAIL=$((STEALTH_FAIL + 1))
@@ -239,8 +266,12 @@ if [[ "${1:-}" == "--flutter" ]]; then
     done
   else
     echo -e "${CYAN}[INFO]${RESET} Desktop Dart AOT tests completed with debug symbols stripped (-S)."
-    echo -e "To verify against your real Flutter arm64 release build, pass the Flutter project path:"
-    echo -e "  ${BOLD}./scripts/verify_aot_strings.sh --flutter /path/to/flutter_project${RESET}"
+    echo -e "Desktop AOT verifies that the Dart VM Object Pool and symbol tables completely prune private enums."
+    echo -e "To verify against your real Flutter arm64 release build, pass your Flutter project path and strings:"
+    echo -e "  ${BOLD}./scripts/verify_aot_strings.sh --flutter /path/to/flutter_project \"val1,val2,val3\"${RESET}"
+    echo -e ""
+    echo -e "You can also specify a control APK to verify strings were leaked before migration:"
+    echo -e "  ${BOLD}CONTROL_APK=pre_migration.apk STEALTH_STRINGS=\"val1,val2\" ./scripts/verify_aot_strings.sh --flutter /path/to/project${RESET}"
     echo -e ""
     echo -e "Or manually test an existing Flutter APK with:"
     echo -e "  ${BOLD}unzip -p build/app/outputs/flutter-apk/app-release.apk lib/arm64-v8a/libapp.so | strings | grep -E 'superAdmin|trial|cancelled'${RESET}"

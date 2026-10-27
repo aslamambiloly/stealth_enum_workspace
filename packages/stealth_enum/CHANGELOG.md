@@ -1,3 +1,12 @@
+## 2.2.2
+
+### Security & CI Transparency
+* Documented `require_key: true` option in `build.yaml` and `STEALTH_ENUM_REQUIRE_KEY="1"` CI environment variable to prevent silent fallbacks to the public default salt.
+* Documented `dart run build_runner clean` recommendation for key rotation and caching awareness.
+* Documented generated key fingerprint auditing (`// Key fingerprint: <8-char hex>`).
+* Enhanced AOT empirical verification documentation with `STEALTH_STRINGS` and `CONTROL_APK` comparison instructions.
+* Zero hash churn: 100% byte-for-byte backwards compatible with 2.2.0 and 2.2.1.
+
 ## 2.2.1
 
 ### Documentation & Security Transparency

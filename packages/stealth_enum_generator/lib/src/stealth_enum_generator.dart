@@ -31,8 +31,12 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
   /// Default secret key supplied via builder options (`build.yaml`) or environment.
   final String? defaultKey;
 
+  /// Whether a secret key is strictly required. If true and no secret key is provided
+  /// (neither on the annotation nor via builder config / environment), code generation fails.
+  final bool requireKey;
+
   /// Creates a [StealthEnumGenerator] instance.
-  const StealthEnumGenerator({this.defaultKey});
+  const StealthEnumGenerator({this.defaultKey, this.requireKey = false});
 
   static const Set<String> _reservedNames = {
     'when',
@@ -88,8 +92,30 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     final bool generateLabel =
         annotation.peek('generateLabel')?.boolValue ?? false;
     final int? seedOverride = annotation.peek('seed')?.intValue;
-    final String? keyOverride =
+    final String? rawKeyOverride =
         annotation.peek('key')?.stringValue ?? defaultKey;
+    final String? keyOverride =
+        (rawKeyOverride != null && rawKeyOverride.trim().isNotEmpty)
+            ? rawKeyOverride.trim()
+            : null;
+
+    if (requireKey && keyOverride == null) {
+      throw InvalidGenerationSourceError(
+        'Enum "$publicName" requires a secret key for cryptographic security, but none was provided.\n'
+        'Provide a key via @StealthEnum(key: "secret"), build.yaml (options: {key: "secret"}), '
+        'or the STEALTH_ENUM_KEY environment variable.',
+        element: element,
+        todo: 'Provide a high-entropy secret key or remove require_key.',
+      );
+    }
+
+    if (keyOverride == null && seedOverride == null) {
+      log.warning(
+        'stealth_enum: Enum "$publicName" is using the public default salt. '
+        'For cryptographic security against dictionary recovery, provide a secret key '
+        'via @StealthEnum(key: "..."), build.yaml, or STEALTH_ENUM_KEY.',
+      );
+    }
 
     // ── Extract enum constants ────────────────────────────────────────────────
     final List<FieldElement> constants =
@@ -128,7 +154,14 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     // ── Emit code ─────────────────────────────────────────────────────────────
     final buffer = StringBuffer();
     _writeExtensionType(
-        buffer, publicName, fieldNames, valueMap, generateWhen, generateLabel);
+      buffer,
+      publicName,
+      fieldNames,
+      valueMap,
+      generateWhen,
+      generateLabel,
+      keyOverride,
+    );
     return buffer.toString();
   }
 
@@ -299,8 +332,14 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     List<String> fieldNames,
     Map<String, int> valueMap,
     bool generateWhen,
-    bool generateLabel,
-  ) {
+    bool generateLabel, [
+    String? keyOverride,
+  ]) {
+    if (keyOverride != null && keyOverride.isNotEmpty) {
+      final fp =
+          sha256.convert(utf8.encode(keyOverride)).toString().substring(0, 8);
+      buf.writeln('// Key fingerprint: $fp');
+    }
     buf.writeln('extension type const $publicName._(int rawValue) {');
 
     // Static constants

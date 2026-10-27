@@ -8,10 +8,24 @@ import 'package:stealth_enum_generator/src/stealth_enum_generator.dart';
 /// Uses [SharedPartBuilder] so the generated `*.g.dart` file is shared with
 /// other part-based generators (json_serializable, freezed, riverpod, etc.).
 Builder stealthEnumBuilder(BuilderOptions options) {
-  final defaultKey = options.config['key'] as String? ??
+  final rawKey = options.config['key']?.toString() ??
       Platform.environment['STEALTH_ENUM_KEY'];
+  final trimmedKey = rawKey?.trim();
+  final defaultKey =
+      (trimmedKey != null && trimmedKey.isNotEmpty) ? trimmedKey : null;
+
+  final requireKey = options.config['require_key'] == true ||
+      options.config['require_key'] == 'true' ||
+      Platform.environment['STEALTH_ENUM_REQUIRE_KEY'] == '1' ||
+      Platform.environment['STEALTH_ENUM_REQUIRE_KEY'] == 'true';
+
   return SharedPartBuilder(
-    [StealthEnumGenerator(defaultKey: defaultKey)],
+    [
+      StealthEnumGenerator(
+        defaultKey: defaultKey,
+        requireKey: requireKey,
+      ),
+    ],
     'stealth_enum',
   );
 }

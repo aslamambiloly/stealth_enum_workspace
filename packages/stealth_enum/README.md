@@ -146,11 +146,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.1
+  stealth_enum: ^2.2.2
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.1
+  stealth_enum_generator: ^2.2.2
 ```
 
 Then run:
@@ -564,14 +564,38 @@ targets:
       stealth_enum_generator:stealth_enum:
         options:
           key: "YOUR_HIGH_ENTROPY_BUILD_SECRET"
+          require_key: true  # Fails build if any enum lacks a secret key
 ```
 
 Or pass it dynamically in CI via the `STEALTH_ENUM_KEY` environment variable without committing the secret to source control:
 
 ```bash
 export STEALTH_ENUM_KEY="YOUR_HIGH_ENTROPY_BUILD_SECRET"
+export STEALTH_ENUM_REQUIRE_KEY="1"  # Guarantees CI fails if secret is missing or empty
 dart run build_runner build --delete-conflicting-outputs
 ```
+
+> [!CAUTION]
+> **Enforce `require_key: true` in CI:**
+> If an unset CI secret evaluates to an empty string (`""`), unkeyed builds will fall back to the public default salt with a compile-time warning. Setting `require_key: true` or `STEALTH_ENUM_REQUIRE_KEY="1"` ensures your CI pipeline immediately fails hard if the secret key is missing.
+
+> [!NOTE]
+> **Build Caching Notice:**
+> `build_runner` caches generated artifacts and does not automatically detect changes in environment variables across invocations. Whenever you set, change, or rotate your secret keys, run:
+> ```bash
+> dart run build_runner clean
+> ```
+
+##### Key Fingerprint Verification
+
+When a secret key is configured, `stealth_enum_generator` includes an 8-character SHA-256 fingerprint comment in each generated file:
+
+```dart
+// Key fingerprint: a4f8e219
+extension type const SecretStatus._(int rawValue) {
+```
+
+This fingerprint allows CI checks and reviewers to verify that files were generated with the expected secret key without exposing the key itself.
 
 #### Core Architectural Guarantees
 
@@ -743,11 +767,17 @@ With `generateLabel: true`, string label ergonomics are emitted into the extensi
 
 ## Empirical AOT Verification Benchmark
 
-The workspace includes a side-by-side empirical verification script comparing standard Dart enums against `@StealthEnum` in native AOT compilation:
+The workspace includes an empirical verification script comparing standard Dart enums against `@StealthEnum`:
 
 ```bash
-cd /path/to/stealth_enum_workspace
+# 1. Desktop AOT verification (verifies Dart VM Object Pool string erasure with stripped symbols):
 bash scripts/verify_aot_strings.sh
+
+# 2. Real Flutter arm64 release APK verification with custom enum strings:
+bash scripts/verify_aot_strings.sh --flutter /path/to/flutter_project "myRole,myTier,myFlag"
+
+# 3. Comparing pre-migration control APK vs stealth APK:
+CONTROL_APK="old_release.apk" bash scripts/verify_aot_strings.sh --flutter /path/to/flutter_project "myRole,myTier"
 ```
 
 **How it proves string erasure:**

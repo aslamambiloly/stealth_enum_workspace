@@ -1,5 +1,7 @@
+import 'dart:convert';
 import 'package:build/build.dart';
 import 'package:build_test/build_test.dart';
+import 'package:crypto/crypto.dart';
 import 'package:logging/logging.dart';
 import 'package:stealth_enum_generator/src/builder.dart';
 import 'package:stealth_enum_generator/src/stealth_enum_generator.dart';
@@ -475,11 +477,21 @@ enum _ReservedVal {
       );
     });
 
-    test('stealthEnumBuilder applies config key from build.yaml', () async {
+    test('stealthEnumBuilder derives exact HMAC values, emits key fingerprint, and differs from default salt', () async {
+      const key = 'project_wide_ci_secret_key';
+      final expectedActive = _expectedHex(key, 'SecretStatus', 'active');
+      final expectedInactive = _expectedHex(key, 'SecretStatus', 'inactive');
+      final defaultActive = _defaultSaltHex('SecretStatus', 'active');
+      final defaultInactive = _defaultSaltHex('SecretStatus', 'inactive');
+      final expectedFp = sha256.convert(utf8.encode(key)).toString().substring(0, 8);
+
+      expect(expectedActive, isNot(equals(defaultActive)),
+          reason: 'Keyed hash must differ from default salt');
+      expect(expectedInactive, isNot(equals(defaultInactive)),
+          reason: 'Keyed hash must differ from default salt');
+
       await testBuilder(
-        stealthEnumBuilder(
-          const BuilderOptions({'key': 'project_wide_ci_secret_key'}),
-        ),
+        stealthEnumBuilder(const BuilderOptions({'key': key})),
         _withSources({
           'a|lib/secret_status.dart': '''
 import 'package:stealth_enum/stealth_enum.dart';
@@ -493,13 +505,161 @@ enum _SecretStatus { active, inactive }
         outputs: {
           'a|lib/secret_status.stealth_enum.g.part': decodedMatches(
             allOf([
+              contains('// Key fingerprint: $expectedFp'),
               contains('extension type const SecretStatus._(int rawValue) {'),
-              contains('static const SecretStatus active = SecretStatus._('),
-              contains('static const SecretStatus inactive = SecretStatus._('),
+              contains('static const SecretStatus active = SecretStatus._($expectedActive);'),
+              contains('static const SecretStatus inactive = SecretStatus._($expectedInactive);'),
             ]),
           ),
         },
       );
     });
+
+    test('stealthEnumBuilder handles numeric key in config without cast exception', () async {
+      const numericKey = 12345;
+      final expectedActive = _expectedHex('12345', 'NumStatus', 'active');
+
+      await testBuilder(
+        stealthEnumBuilder(const BuilderOptions({'key': numericKey})),
+        _withSources({
+          'a|lib/num_status.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'num_status.g.dart';
+
+@StealthEnum()
+enum _NumStatus { active }
+''',
+        }),
+        outputs: {
+          'a|lib/num_status.stealth_enum.g.part': decodedMatches(
+            contains('static const NumStatus active = NumStatus._($expectedActive);'),
+          ),
+        },
+      );
+    });
+
+    test('key precedence: enum-level key overrides global builder key', () async {
+      const globalKey = 'global_builder_key';
+      const localKey = 'local_enum_key';
+      final expectedLocal = _expectedHex(localKey, 'OverrideStatus', 'active');
+      final expectedGlobal = _expectedHex(globalKey, 'OverrideStatus', 'active');
+
+      expect(expectedLocal, isNot(equals(expectedGlobal)));
+
+      await testBuilder(
+        stealthEnumBuilder(const BuilderOptions({'key': globalKey})),
+        _withSources({
+          'a|lib/override_status.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'override_status.g.dart';
+
+@StealthEnum(key: '$localKey')
+enum _OverrideStatus { active }
+''',
+        }),
+        outputs: {
+          'a|lib/override_status.stealth_enum.g.part': decodedMatches(
+            contains('static const OverrideStatus active = OverrideStatus._($expectedLocal);'),
+          ),
+        },
+      );
+    });
+
+    test('key precedence: global builder key overrides enum-level seed', () async {
+      const globalKey = 'global_builder_key';
+      const seed = 42;
+      final expectedKeyed = _expectedHex(globalKey, 'SeededStatus', 'active');
+      final expectedSeeded = _expectedHex('stealth_enum:seed:$seed', 'SeededStatus', 'active');
+
+      expect(expectedKeyed, isNot(equals(expectedSeeded)));
+
+      await testBuilder(
+        stealthEnumBuilder(const BuilderOptions({'key': globalKey})),
+        _withSources({
+          'a|lib/seeded_status.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'seeded_status.g.dart';
+
+@StealthEnum(seed: $seed)
+enum _SeededStatus { active }
+''',
+        }),
+        outputs: {
+          'a|lib/seeded_status.stealth_enum.g.part': decodedMatches(
+            contains('static const SeededStatus active = SeededStatus._($expectedKeyed);'),
+          ),
+        },
+      );
+    });
+
+    test('require_key: true fails build when key is absent or empty', () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(const BuilderOptions({'require_key': true})),
+        _withSources({
+          'a|lib/unkeyed.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'unkeyed.g.dart';
+
+@StealthEnum()
+enum _Unkeyed { active }
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains('requires a secret key for cryptographic security')),
+      );
+    });
+
+    test('require_key: false logs warning when enum uses public default salt', () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/warn_enum.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'warn_enum.g.dart';
+
+@StealthEnum()
+enum _WarnEnum { active }
+''',
+        }),
+        outputs: {
+          'a|lib/warn_enum.stealth_enum.g.part': decodedMatches(
+            contains('static const WarnEnum active = WarnEnum._('),
+          ),
+        },
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains('is using the public default salt')),
+      );
+    });
   });
+}
+
+String _expectedHex(String key, String enumName, String field) {
+  final b = Hmac(sha256, utf8.encode(key))
+      .convert(utf8.encode('$enumName::$field'))
+      .bytes;
+  final raw = ((b[0] & 0xFF) << 24) |
+      ((b[1] & 0xFF) << 16) |
+      ((b[2] & 0xFF) << 8) |
+      (b[3] & 0xFF);
+  final pos = raw & 0x7FFFFFFF;
+  final val = pos < 0x10000000 ? pos + 0x10000000 : pos;
+  return '0x${val.toRadixString(16).toUpperCase().padLeft(8, '0')}';
+}
+
+String _defaultSaltHex(String enumName, String field) {
+  return _expectedHex('stealth_enum:default_salt:0xDEADBEEF', enumName, field);
 }

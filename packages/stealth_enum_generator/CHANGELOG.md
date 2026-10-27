@@ -1,3 +1,14 @@
+## 2.2.2
+
+### Hardening & Key Management
+* Added `require_key` support in `build.yaml` (`options.config['require_key']: true`) and `STEALTH_ENUM_REQUIRE_KEY="1"` CI environment variable to fail the build if any enum lacks a secret key or if the key is empty, preventing accidental silent fallback to the public default salt.
+* Safe type coercion for YAML builder config (`options.config['key']?.toString()`), supporting numeric/integer keys without type cast exceptions.
+* Added compile-time warning when an enum falls back to the public default salt.
+* Emits a non-reversible 8-character SHA-256 key fingerprint comment (`// Key fingerprint: <hash>`) in generated files when a secret key is configured.
+* Rigorous unit tests asserting exact HMAC-SHA256 mathematical derivation, key fingerprinting, numeric keys, precedence rules, and `require_key` enforcement.
+* Requires `stealth_enum: ">=2.2.2 <3.0.0"`.
+* Zero hash churn: 100% byte-for-byte backwards compatible with 2.2.0 and 2.2.1.
+
 ## 2.2.1
 
 ### Improvements & Hardening
