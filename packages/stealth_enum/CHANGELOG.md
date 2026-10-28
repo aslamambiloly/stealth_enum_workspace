@@ -1,3 +1,12 @@
+## 2.2.5
+
+### Security & CI Hardening
+* **Placeholder Key Protection**: Documented compile-time rejection of documented public placeholder keys by `stealth_enum_generator`.
+* **CI Regex Key Guard**: Documented recommended CI key strength verification (`[[ "${STEALTH_ENUM_KEY:-}" =~ ^[A-Za-z0-9_-]{32,}$ ]]`) to enforce high entropy before code generation.
+* **Fingerprint Baseline Auditing**: Clarified fingerprint auditing procedures with `grep -rh "Key fingerprint" lib | sort -u`.
+* **Documentation Links**: Corrected Table of Contents navigation link to secret key configuration.
+* **Zero Constant Churn**: 100% constant value backwards compatible with 2.2.0, 2.2.1, 2.2.2, 2.2.3, and 2.2.4.
+
 ## 2.2.4
 
 ### Security & Hardening

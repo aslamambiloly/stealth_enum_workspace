@@ -6,6 +6,7 @@ import 'package:logging/logging.dart';
 import 'package:stealth_enum_generator/src/builder.dart';
 import 'package:stealth_enum_generator/src/stealth_enum_generator.dart';
 import 'package:test/test.dart';
+import 'package:yaml/yaml.dart';
 
 const _stealthEnumPkgSource = '''
 library stealth_enum;
@@ -814,6 +815,103 @@ enum _SeededWarn { a }
         logs,
         anyElement(
             contains('is using a 32-bit integer seed. Seeds have low entropy')),
+      );
+    });
+
+    test('rejects documented public placeholder key with error', () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(BuilderOptions.empty),
+        _withSources({
+          'a|lib/placeholder.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'placeholder.g.dart';
+
+@StealthEnum(key: 'your-project-secret-salt-here-or-env')
+enum _Placeholder { a }
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(contains('documented public placeholder key')),
+      );
+    });
+
+    test('require_key: true fails build when key is under 24 characters',
+        () async {
+      final logs = <String>[];
+      await testBuilder(
+        stealthEnumBuilder(const BuilderOptions({
+          'key': 'short_key_123',
+          'require_key': true,
+        })),
+        _withSources({
+          'a|lib/short_require.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'short_require.g.dart';
+
+@StealthEnum()
+enum _ShortRequire { a }
+''',
+        }),
+        outputs: {},
+        onLog: (LogRecord record) => logs.add(record.message),
+      );
+      expect(
+        logs,
+        anyElement(
+            contains('require_key enabled, but the provided key is only')),
+      );
+    });
+
+    test(
+        'real build.yaml parsed options configure builder and derive keyed constants',
+        () async {
+      const yamlContent = '''
+targets:
+  \$default:
+    builders:
+      stealth_enum_generator:stealth_enum:
+        options:
+          key: "test_build_yaml_parsed_secret_key_12345"
+          require_key: true
+''';
+      final yaml = loadYaml(yamlContent) as Map;
+      final targets = yaml['targets'] as Map;
+      final defaultTarget = targets[r'$default'] as Map;
+      final builders = defaultTarget['builders'] as Map;
+      final stealthBuilder =
+          builders['stealth_enum_generator:stealth_enum'] as Map;
+      final optionsMap =
+          Map<String, dynamic>.from(stealthBuilder['options'] as Map);
+
+      final builder = stealthEnumBuilder(BuilderOptions(optionsMap));
+      await testBuilder(
+        builder,
+        _withSources({
+          'a|lib/status.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'status.g.dart';
+
+@StealthEnum()
+enum _Status { pending, done }
+''',
+        }),
+        outputs: {
+          'a|lib/status.stealth_enum.g.part': decodedMatches(
+            allOf([
+              contains('// Key fingerprint:'),
+              contains('static const Status pending = Status._('),
+              contains('static const Status done = Status._('),
+            ]),
+          ),
+        },
       );
     });
   });

@@ -197,9 +197,23 @@ fi
 
 STEALTH_FAIL=0
 STEALTH_PASS=0
+STEALTH_AMBIGUOUS=0
 
 for s in "${SCAN_STRINGS[@]}"; do
+  IN_STEALTH=0
+  IN_CONTROL=0
   if scan_binary_for_string "$STEALTH_BIN" "$s"; then
+    IN_STEALTH=1
+  fi
+  if scan_binary_for_string "$CONTROL_BIN" "$s"; then
+    IN_CONTROL=1
+  fi
+
+  if [[ "$IN_STEALTH" -eq 1 && "$IN_CONTROL" -eq 1 ]]; then
+    echo -e "  ${YELLOW}[AMBIGUOUS]${RESET} String '${BOLD}$s${RESET}' found in BOTH Control and Stealth binaries (likely present in runtime/stdlib)."
+    echo -e "              Tip: For unequivocal isolation, use canary identifiers (e.g., 'zqCanary$s')."
+    STEALTH_AMBIGUOUS=$((STEALTH_AMBIGUOUS + 1))
+  elif [[ "$IN_STEALTH" -eq 1 ]]; then
     echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in stealth binary: '${BOLD}$s${RESET}'"
     STEALTH_FAIL=$((STEALTH_FAIL + 1))
   else
@@ -267,7 +281,20 @@ if [[ "${1:-}" == "--flutter" ]]; then
     
     echo -e "Scanning Flutter arm64 libapp.so for private enum identifiers..."
     for s in "${SCAN_STRINGS[@]}"; do
+      IN_STEALTH=0
+      IN_CONTROL=0
       if scan_binary_for_string "$BUILD_DIR/libapp.so" "$s"; then
+        IN_STEALTH=1
+      fi
+      if scan_binary_for_string "$BUILD_DIR/control_libapp.so" "$s"; then
+        IN_CONTROL=1
+      fi
+
+      if [[ "$IN_STEALTH" -eq 1 && "$IN_CONTROL" -eq 1 ]]; then
+        echo -e "  ${YELLOW}[AMBIGUOUS]${RESET} String '${BOLD}$s${RESET}' found in BOTH Control and Stealth APKs (common word in stdlib/engine)."
+        echo -e "              Tip: For unequivocal isolation, use canary identifiers (e.g., 'zqCanary$s')."
+        STEALTH_AMBIGUOUS=$((STEALTH_AMBIGUOUS + 1))
+      elif [[ "$IN_STEALTH" -eq 1 ]]; then
         echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in Flutter libapp.so: '${BOLD}$s${RESET}'"
         STEALTH_FAIL=$((STEALTH_FAIL + 1))
       else
@@ -294,6 +321,9 @@ echo -e "${BOLD}${CYAN}═══════════════════
 echo -e "${BOLD}BENCHMARK RESULTS SUMMARY:${RESET}"
 echo -e "  • Control Target (Standard Enum) : ${YELLOW}LEAKED identifier strings into AOT binary${RESET}"
 echo -e "  • Stealth Target (@StealthEnum)  : ${GREEN}0 LEAKS — all $STEALTH_PASS identifiers erased${RESET}"
+if [[ "$STEALTH_AMBIGUOUS" -gt 0 ]]; then
+  echo -e "  • Ambiguous common words         : ${YELLOW}$STEALTH_AMBIGUOUS strings found in both builds (use canary names)${RESET}"
+fi
 echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
 echo ""
 

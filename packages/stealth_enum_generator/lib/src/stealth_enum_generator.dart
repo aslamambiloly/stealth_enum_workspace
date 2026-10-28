@@ -53,6 +53,11 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
     'orElse',
   };
 
+  static const Set<String> _publicPlaceholders = {
+    'your-project-secret-salt-here-or-env',
+    'YOUR_HIGH_ENTROPY_BUILD_SECRET',
+  };
+
   @override
   dynamic generateForAnnotatedElement(
     Element element,
@@ -125,6 +130,27 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
       }
 
       if (keyOverride != null) {
+        if (_publicPlaceholders.contains(keyOverride)) {
+          throw InvalidGenerationSourceError(
+            'Enum "$publicName" is configured with a documented public placeholder key ("$keyOverride").\n'
+            'Do not use README/documentation example keys in actual code. '
+            'Generate a private random key: python3 -c "import secrets;print(secrets.token_urlsafe(24))"',
+            element: element,
+            todo:
+                'Replace the placeholder with a secure high-entropy secret key.',
+          );
+        }
+
+        if (requireKey && keyOverride.length < 24) {
+          throw InvalidGenerationSourceError(
+            'Enum "$publicName" has require_key enabled, but the provided key is only ${keyOverride.length} characters long.\n'
+            'Keys must be at least 24 characters to prevent offline dictionary confirmation.',
+            element: element,
+            todo:
+                'Provide a key with at least 24 characters (e.g. via python3 -c "import secrets;print(secrets.token_urlsafe(24))").',
+          );
+        }
+
         if (keyOverride.length < 24) {
           log.warning(
             'stealth_enum: key for "$publicName" is under 24 chars; '

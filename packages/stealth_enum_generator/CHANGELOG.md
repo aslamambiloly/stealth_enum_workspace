@@ -1,3 +1,12 @@
+## 2.2.5
+
+### Security & Hardening
+* **Placeholder Key Rejection**: The generator now rejects documented public placeholder keys (e.g., `'your-project-secret-salt-here-or-env'` and `'YOUR_HIGH_ENTROPY_BUILD_SECRET'`) with an `InvalidGenerationSourceError` at compile time, preventing accidental public key usage.
+* **`require_key` Minimum Length Enforcement**: When `require_key: true` or `STEALTH_ENUM_REQUIRE_KEY="1"` is active, keys shorter than 24 characters throw an `InvalidGenerationSourceError` instead of only issuing a warning.
+* **AOT Verification Ambiguity Detection**: Updated `scripts/verify_aot_strings.sh` to cross-reference strings in both Control and Stealth binaries; common words appearing in both builds (such as runtime or stdlib identifiers) are marked as `[AMBIGUOUS]` alongside recommendations to use canary names.
+* **Real `build.yaml` Builder Parsing Test**: Added a unit test validating builder options parsing directly from real `build.yaml` syntax.
+* **Zero Constant Churn**: 100% constant value backwards compatible with 2.2.0, 2.2.1, 2.2.2, 2.2.3, and 2.2.4. Note: If your CI audits generated code comments via recorded fingerprint baselines, update your recorded baseline with `grep -rh "Key fingerprint" lib | sort -u`.
+
 ## 2.2.4
 
 ### Security & Hardening

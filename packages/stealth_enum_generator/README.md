@@ -23,11 +23,11 @@ Add `stealth_enum_generator` to your `dev_dependencies` alongside `build_runner`
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.4
+  stealth_enum: ^2.2.5
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.4
+  stealth_enum_generator: ^2.2.5
 ```
 
 Then run:
@@ -48,17 +48,24 @@ targets:
     builders:
       stealth_enum_generator:stealth_enum:
         options:
-          key: "YOUR_HIGH_ENTROPY_BUILD_SECRET"
-          require_key: true  # Fails build if any enum lacks a key
+          key: "REPLACE_WITH_SECRET"
+          require_key: true  # Fails build if any enum lacks a key or if key < 24 chars
 ```
 
 Or pass it dynamically via the `STEALTH_ENUM_KEY` environment variable in CI:
 
 ```bash
-export STEALTH_ENUM_KEY="YOUR_HIGH_ENTROPY_BUILD_SECRET"
-export STEALTH_ENUM_REQUIRE_KEY="1"  # Guarantees CI fails if key is empty
+# Recommended CI guard to enforce key strength before running build_runner:
+[[ "${STEALTH_ENUM_KEY:-}" =~ ^[A-Za-z0-9_-]{32,}$ ]] || { echo "weak or missing key"; exit 1; }
+
+export STEALTH_ENUM_KEY
+export STEALTH_ENUM_REQUIRE_KEY="1"  # Guarantees CI fails if key is missing or under 24 chars
 dart run build_runner build --delete-conflicting-outputs
 ```
+
+> [!CAUTION]
+> **Enforce `require_key: true` in CI & Placeholder Protection:**
+> Documented public placeholders (like `'your-project-secret-salt-here-or-env'` or `'YOUR_HIGH_ENTROPY_BUILD_SECRET'`) are rejected by the generator at build time. When `require_key` is enabled, keys shorter than 24 characters will fail the build with an error.
 
 > [!NOTE]
 > `build_runner` does not track changes in environment variables automatically across runs. After changing or rotating keys, run `dart run build_runner clean`.

@@ -2,7 +2,7 @@ name: stealth_enum_generator
 description: >-
   Code generator for stealth_enum that transforms private enums into
   zero-cost obfuscated extension types to eliminate AOT binary metadata.
-version: 2.2.4
+version: 2.2.5
 repository: https://github.com/aslamambiloly/stealth_enum_workspace
 issue_tracker: https://github.com/aslamambiloly/stealth_enum_workspace/issues
 
@@ -29,3 +29,4 @@ dev_dependencies:
   lints: ^6.1.0
   logging: ">=1.2.0 <2.0.0"
   test: "^1.24.0"
+  yaml: ^3.1.2

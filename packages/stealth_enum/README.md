@@ -83,7 +83,7 @@ And enjoy using the **same enum class** with **same enum name** as if nothing ha
   - [1. Annotate a private enum](#1-annotate-a-private-enum)
   - [2. Run the code generator](#2-run-the-code-generator)
   - [3. Use the generated extension type](#3-use-the-generated-extension-type)
-  - [Custom seed for deterministic builds](#custom-seed-for-deterministic-builds)
+  - [Secret key for cryptographic secrecy](#secret-key-for-cryptographic-secrecy)
   - [Custom type name](#custom-type-name)
   - [Safe Parsing & Zero-Crash Architecture](#safe-parsing--zero-crash-architecture)
   - [Serialization & Logging (generateLabel)](#serialization--logging-generatelabel)
@@ -146,11 +146,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.4
+  stealth_enum: ^2.2.5
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.4
+  stealth_enum_generator: ^2.2.5
 ```
 
 Then run:
@@ -241,7 +241,7 @@ void main() {
 For cryptographic resistance against dictionary recovery, supply a secret key (minimum 24 characters recommended):
 
 ```dart
-@StealthEnum(key: 'your-project-secret-salt-here-or-env')
+@StealthEnum(key: 'REPLACE_WITH_SECRET')
 enum _SubscriptionTier {
   free,
   pro,
@@ -252,7 +252,7 @@ enum _SubscriptionTier {
 > [!TIP]
 > **Preferred Key Configuration:** In production, configure the secret key project-wide in `build.yaml` or via the `STEALTH_ENUM_KEY` CI environment variable so keys are not hardcoded in source files.
 >
-> *(Note: A legacy `seed: int` parameter is also supported as a 32-bit namespace separator, but provides low entropy. Use `key:` for cryptographic protection).*
+> *(Note: Documented public placeholder strings are strictly rejected by the generator at compile time. Short keys under 24 characters will trigger a warning, or fail the build if `require_key` is enabled. A legacy `seed: int` parameter is also supported as a 32-bit namespace separator, but provides low entropy. Always use `key:` for cryptographic protection).*
 
 ### Custom type name
 
@@ -568,21 +568,25 @@ targets:
     builders:
       stealth_enum_generator:stealth_enum:
         options:
-          key: "YOUR_HIGH_ENTROPY_BUILD_SECRET"
-          require_key: true  # Fails build if any enum lacks a secret key
+          key: "REPLACE_WITH_SECRET"
+          require_key: true  # Fails build if any enum lacks a secret key or if key < 24 chars
 ```
 
 Or pass it dynamically in CI via the `STEALTH_ENUM_KEY` environment variable without committing the secret to source control:
 
 ```bash
-export STEALTH_ENUM_KEY="YOUR_HIGH_ENTROPY_BUILD_SECRET"
-export STEALTH_ENUM_REQUIRE_KEY="1"  # Guarantees CI fails if secret is missing or empty
+# Recommended CI guard to enforce high entropy before build:
+[[ "${STEALTH_ENUM_KEY:-}" =~ ^[A-Za-z0-9_-]{32,}$ ]] || { echo "weak or missing key"; exit 1; }
+
+export STEALTH_ENUM_KEY
+export STEALTH_ENUM_REQUIRE_KEY="1"  # Guarantees CI fails if secret is missing or under 24 chars
 dart run build_runner build --delete-conflicting-outputs
 ```
 
 > [!CAUTION]
-> **Enforce `require_key: true` in CI:**
-> If an unset CI secret evaluates to an empty string (`""`), unkeyed builds will fall back to the public default salt with a compile-time warning. Setting `require_key: true` or `STEALTH_ENUM_REQUIRE_KEY="1"` ensures your CI pipeline immediately fails hard if the secret key is missing.
+> **Enforce `require_key: true` in CI & Placeholder Rejection:**
+> - If an unset CI secret evaluates to an empty string (`""`), unkeyed builds will fall back to the public default salt with a compile-time warning. Setting `require_key: true` or `STEALTH_ENUM_REQUIRE_KEY="1"` ensures your CI pipeline immediately fails hard if the secret key is missing or under 24 characters.
+> - Documented public placeholders (such as `'your-project-secret-salt-here-or-env'` and `'YOUR_HIGH_ENTROPY_BUILD_SECRET'`) are explicitly rejected at compile time to prevent accidental public key usage.
 
 > [!NOTE]
 > **Build Caching Notice:**
@@ -600,7 +604,14 @@ When a secret key is configured, `stealth_enum_generator` includes an 8-characte
 extension type const SecretStatus._(int rawValue) {
 ```
 
-This fingerprint (`HMAC-SHA256(key, 'stealth_enum:fingerprint:v1')`) allows CI checks and reviewers to verify that files were generated with the expected secret key without exposing the key itself. To prevent offline dictionary matching against short passwords, the generator issues a compile-time warning if a key is under 24 characters. (Enums whose constants are all frozen with `@StealthValue` omit the fingerprint).
+This fingerprint (`HMAC-SHA256(key, 'stealth_enum:fingerprint:v1')`) allows CI checks and reviewers to verify that files were generated with the expected secret key without exposing the key itself. To prevent offline dictionary matching against short passwords, the generator issues a compile-time warning if a key is under 24 characters (and errors if `require_key` is true). Enums whose constants are all frozen with `@StealthValue` omit the fingerprint.
+
+> [!NOTE]
+> **Fingerprint Baseline Auditing:**
+> Generated integer constant values are 100% stable across versions 2.2.0 through 2.2.5. However, since version 2.2.4 updated the comment format from SHA-256 to domain-separated HMAC-SHA256, if your CI audits recorded fingerprints, update your recorded baseline with:
+> ```bash
+> grep -rh "Key fingerprint" lib | sort -u
+> ```
 
 #### Core Architectural Guarantees
 
