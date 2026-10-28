@@ -421,10 +421,10 @@ packages:
     dependency: "direct main"
     description:
       name: stealth_enum
-      sha256: "77c4636dbfb8a7c38eced680886002c6f6d845b489986204893a51edebf5ff36"
+      sha256: "38e62aea6b8172b9d1390919731b7194a840496c473d1959b5a78fa2bd2f7fb3"
       url: "https://pub.dev"
     source: hosted
-    version: "2.2.4"
+    version: "2.2.5"
   stream_channel:
     dependency: transitive
     description:
