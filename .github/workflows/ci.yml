@@ -42,6 +42,19 @@ jobs:
           dart pub get
           dart test
 
+      - name: Verify Secret Key Strength Guard
+        shell: bash
+        run: |
+          # Verify documented CI regex guard in bash
+          TEST_KEY="$(python3 -c 'import secrets;print(secrets.token_urlsafe(24))')"
+          [[ "${TEST_KEY:-}" =~ ^[A-Za-z0-9_-]{32,}$ ]] || { echo "Valid secret key unexpectedly failed regex guard"; exit 1; }
+          # Verify weak key fails guard
+          WEAK_KEY="short_weak_key_123"
+          if [[ "${WEAK_KEY:-}" =~ ^[A-Za-z0-9_-]{32,}$ ]]; then
+            echo "Weak key unexpectedly passed regex guard"; exit 1;
+          fi
+          echo "Secret key CI regex guard verified."
+
       - name: Verify build_runner code generation
         run: |
           cd example

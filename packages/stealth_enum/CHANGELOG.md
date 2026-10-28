@@ -1,3 +1,10 @@
+## 2.2.6
+
+### Hardening & Verifier Integrity
+* **AOT Verifier Strict Leak Detection**: Fixed empirical AOT benchmark (`scripts/verify_aot_strings.sh`) so that any sensitive string presence in the stealth build is strictly counted as a failure (`[FAIL]`) rather than `[AMBIGUOUS]`. If also present in the control build, it provides actionable advice to isolate via canary identifiers (`zqCanary$s`). Enforces failure if 0 strings are verified.
+* **CI Secret Key Enforcement**: Added automated verification of the 32-character secret key regex guard in GitHub Actions CI workflow.
+* **Zero Constant Churn**: 100% constant value backwards compatible with 2.2.0 through 2.2.5.
+
 ## 2.2.5
 
 ### Security & CI Hardening

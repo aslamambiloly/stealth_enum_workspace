@@ -146,11 +146,11 @@ Add `stealth_enum` to your `pubspec.yaml`:
 
 ```yaml
 dependencies:
-  stealth_enum: ^2.2.5
+  stealth_enum: ^2.2.6
 
 dev_dependencies:
   build_runner: ^2.4.0
-  stealth_enum_generator: ^2.2.5
+  stealth_enum_generator: ^2.2.6
 ```
 
 Then run:

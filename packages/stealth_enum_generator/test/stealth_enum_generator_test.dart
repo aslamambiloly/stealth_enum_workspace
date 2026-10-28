@@ -818,26 +818,36 @@ enum _SeededWarn { a }
       );
     });
 
-    test('rejects documented public placeholder key with error', () async {
+    test(
+        'rejects documented public placeholder keys (including case-insensitive and trimmed)',
+        () async {
       final logs = <String>[];
       await testBuilder(
         stealthEnumBuilder(BuilderOptions.empty),
         _withSources({
-          'a|lib/placeholder.dart': '''
+          'a|lib/placeholder1.dart': '''
 import 'package:stealth_enum/stealth_enum.dart';
 
-part 'placeholder.g.dart';
+part 'placeholder1.g.dart';
 
 @StealthEnum(key: 'your-project-secret-salt-here-or-env')
-enum _Placeholder { a }
+enum _Placeholder1 { a }
+''',
+          'a|lib/placeholder2.dart': '''
+import 'package:stealth_enum/stealth_enum.dart';
+
+part 'placeholder2.g.dart';
+
+@StealthEnum(key: '  replace_with_secret  ')
+enum _Placeholder2 { a }
 ''',
         }),
         outputs: {},
         onLog: (LogRecord record) => logs.add(record.message),
       );
       expect(
-        logs,
-        anyElement(contains('documented public placeholder key')),
+        logs.where((msg) => msg.contains('documented public placeholder key')),
+        hasLength(2),
       );
     });
 

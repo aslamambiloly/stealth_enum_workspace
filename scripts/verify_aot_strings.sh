@@ -197,7 +197,6 @@ fi
 
 STEALTH_FAIL=0
 STEALTH_PASS=0
-STEALTH_AMBIGUOUS=0
 
 for s in "${SCAN_STRINGS[@]}"; do
   IN_STEALTH=0
@@ -209,12 +208,11 @@ for s in "${SCAN_STRINGS[@]}"; do
     IN_CONTROL=1
   fi
 
-  if [[ "$IN_STEALTH" -eq 1 && "$IN_CONTROL" -eq 1 ]]; then
-    echo -e "  ${YELLOW}[AMBIGUOUS]${RESET} String '${BOLD}$s${RESET}' found in BOTH Control and Stealth binaries (likely present in runtime/stdlib)."
-    echo -e "              Tip: For unequivocal isolation, use canary identifiers (e.g., 'zqCanary$s')."
-    STEALTH_AMBIGUOUS=$((STEALTH_AMBIGUOUS + 1))
-  elif [[ "$IN_STEALTH" -eq 1 ]]; then
+  if [[ "$IN_STEALTH" -eq 1 ]]; then
     echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in stealth binary: '${BOLD}$s${RESET}'"
+    if [[ "$IN_CONTROL" -eq 1 ]]; then
+      echo -e "         ${YELLOW}(if '$s' is a common word, rename the constant to a canary like zqCanary$s and rebuild both)${RESET}"
+    fi
     STEALTH_FAIL=$((STEALTH_FAIL + 1))
   else
     echo -e "  ${GREEN}[PASS]${RESET} Sensitive string ABSENT from binary: '$s'"
@@ -290,12 +288,11 @@ if [[ "${1:-}" == "--flutter" ]]; then
         IN_CONTROL=1
       fi
 
-      if [[ "$IN_STEALTH" -eq 1 && "$IN_CONTROL" -eq 1 ]]; then
-        echo -e "  ${YELLOW}[AMBIGUOUS]${RESET} String '${BOLD}$s${RESET}' found in BOTH Control and Stealth APKs (common word in stdlib/engine)."
-        echo -e "              Tip: For unequivocal isolation, use canary identifiers (e.g., 'zqCanary$s')."
-        STEALTH_AMBIGUOUS=$((STEALTH_AMBIGUOUS + 1))
-      elif [[ "$IN_STEALTH" -eq 1 ]]; then
+      if [[ "$IN_STEALTH" -eq 1 ]]; then
         echo -e "  ${RED}[FAIL]${RESET} Sensitive string FOUND in Flutter libapp.so: '${BOLD}$s${RESET}'"
+        if [[ "$IN_CONTROL" -eq 1 ]]; then
+          echo -e "         ${YELLOW}(if '$s' is a common word, rename the constant to a canary like zqCanary$s and rebuild both)${RESET}"
+        fi
         STEALTH_FAIL=$((STEALTH_FAIL + 1))
       else
         echo -e "  ${GREEN}[PASS]${RESET} Sensitive string ABSENT from Flutter libapp.so: '$s'"
@@ -320,12 +317,17 @@ echo ""
 echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
 echo -e "${BOLD}BENCHMARK RESULTS SUMMARY:${RESET}"
 echo -e "  • Control Target (Standard Enum) : ${YELLOW}LEAKED identifier strings into AOT binary${RESET}"
-echo -e "  • Stealth Target (@StealthEnum)  : ${GREEN}0 LEAKS — all $STEALTH_PASS identifiers erased${RESET}"
-if [[ "$STEALTH_AMBIGUOUS" -gt 0 ]]; then
-  echo -e "  • Ambiguous common words         : ${YELLOW}$STEALTH_AMBIGUOUS strings found in both builds (use canary names)${RESET}"
+echo -e "  • Stealth Target (@StealthEnum)  : ${GREEN}$STEALTH_PASS strings confirmed absent (0 leaks)${RESET}"
+if [[ "$STEALTH_FAIL" -gt 0 ]]; then
+  echo -e "  • Leaked Identifiers             : ${RED}$STEALTH_FAIL strings found in stealth binary${RESET}"
 fi
 echo -e "${BOLD}${CYAN}══════════════════════════════════════════════════════════════${RESET}"
 echo ""
+
+if [[ "$STEALTH_PASS" -eq 0 ]]; then
+  echo -e "${BOLD}${RED}UNVERIFIED: Nothing verified (0 strings passed).${RESET}"
+  exit 1
+fi
 
 if [ "$STEALTH_FAIL" -eq 0 ]; then
   echo -e "${BOLD}${GREEN}✓ ALL EMPIRICAL AOT TESTS PASSED.${RESET}"

@@ -56,6 +56,7 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
   static const Set<String> _publicPlaceholders = {
     'your-project-secret-salt-here-or-env',
     'YOUR_HIGH_ENTROPY_BUILD_SECRET',
+    'REPLACE_WITH_SECRET',
   };
 
   @override
@@ -130,7 +131,10 @@ class StealthEnumGenerator extends GeneratorForAnnotation<StealthEnum> {
       }
 
       if (keyOverride != null) {
-        if (_publicPlaceholders.contains(keyOverride)) {
+        final normalizedKey = keyOverride.trim().toLowerCase();
+        final isPlaceholder = _publicPlaceholders
+            .any((p) => p.trim().toLowerCase() == normalizedKey);
+        if (isPlaceholder) {
           throw InvalidGenerationSourceError(
             'Enum "$publicName" is configured with a documented public placeholder key ("$keyOverride").\n'
             'Do not use README/documentation example keys in actual code. '

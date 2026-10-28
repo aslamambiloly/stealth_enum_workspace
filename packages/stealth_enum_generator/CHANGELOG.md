@@ -1,3 +1,10 @@
+## 2.2.6
+
+### Hardening & Verifier Integrity
+* **Case-Insensitive & Trimmed Placeholder Deny-List**: Documented placeholders (including `REPLACE_WITH_SECRET`, `YOUR_HIGH_ENTROPY_BUILD_SECRET`, and `your-project-secret-salt-here-or-env`) are now checked case-insensitively and trimmed, throwing `InvalidGenerationSourceError` on any variation.
+* **AOT Verifier Strict Leak Detection**: Updated empirical AOT verification script (`scripts/verify_aot_strings.sh`) so that any sensitive string presence in the stealth build is strictly counted as a failure (`[FAIL]`) rather than `[AMBIGUOUS]`.
+* **Zero Constant Churn**: 100% constant value backwards compatible with 2.2.0 through 2.2.5.
+
 ## 2.2.5
 
 ### Security & Hardening
